@@ -1,42 +1,29 @@
 <# : batch portion
+@setlocal DisableDelayedExpansion
 @echo off
-fltmc >nul || (powershell "Start -Verb RunAs '%~f0'" & exit) & cd /D "%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "[scriptblock]::Create((Get-Content -LiteralPath '%~f0' -Raw -Encoding UTF8)).Invoke(@(&{$args}%*))"
+Color 0F
+echo "%*"|find /i "-el" >nul && set _elev=1
+set arg="""%~f0""" -el
+setlocal EnableDelayedExpansion
+>nul 2>&1 fltmc || >nul 2>&1 net session || (
+    if not defined _elev (
+		powershell -nop -c "saps cmd.exe '/c', '!arg!' -Verb RunAs" >nul 2>&1 && exit /b 0
+	)
+	echo.
+	echo This script require administrator privileges.
+	echo To do so, right click on this script and select 'Run as administrator'.
+	pause
+    exit 1
+)
+where pwsh.exe >nul 2>&1 && set "ps1=pwsh" || set "ps1=powershell"
+%ps1% -nop -ep Bypass -c "Get-Content '%~f0' -Raw | iex"
+goto :eof
 : end batch / begin powershell #>
 
-$Host.UI.RawUI.WindowTitle = $myInvocation.MyCommand.Definition + " (Administrator)"
-$Host.UI.RawUI.BackgroundColor = "Black"
-$Host.PrivateData.ProgressBackgroundColor = "Black"
-$Host.PrivateData.ProgressForegroundColor = "White"
-Clear-Host
-
-$ProgressPreference = 'SilentlyContinue'  
-$ErrorActionPreference = 'SilentlyContinue'
+$Host.UI.RawUI.WindowTitle = 'Services (Administrator)'
 
 function RunAsTI($cmd, $arg) {
-
-	<#
-	  [FEATURES]
-	  - innovative HKCU load, no need for reg load / unload ping-pong; programs get the user profile
-	  - sets ownership privileges, high priority, and explorer support; get System if TI unavailable
-	  - accepts special characters in paths for which default run as administrator fails
-	  - can copy-paste snippet directly in powershell console then use it manually
-	  [USAGE]
-	  - First copy-paste RunAsTI snippet before .ps1 script content
-	  - Then call it anywhere after to launch programs with arguments as TI
-	    RunAsTI regedit
-	    RunAsTI powershell '-noprofile -nologo -noexit -c [environment]::Commandline'
-	    RunAsTI cmd '/k "whoami /all & color e0"'
-	    RunAsTI "C:\System Volume Information"
-	  - Or just relaunch the script once if not already running as TI:
-	    if (((whoami /user)-split' ')[-1]-ne'S-1-5-18') {
-	      RunAsTI powershell "-f $($MyInvocation.MyCommand.Path) $($args[0]) $($args[1..99])"; return
-	    }
-	  2022.01.28: workaround for 11 release (22000) hindering explorer as TI
-	#>
-
-    $id = 'RunAsTI'; $key = "Registry::HKU\$(((whoami /user)-split' ')[-1])\Volatile Environment"; $code = @'
+	$id = 'RunAsTI'; $key = "Registry::HKU\$(((whoami /user)-split' ')[-1])\Volatile Environment"; $code = @'
 $I=[int32]; $M=$I.module.gettype("System.Runtime.Interop`Services.Mar`shal"); $P=$I.module.gettype("System.Int`Ptr"); $S=[string]
 $D=@(); $T=@(); $DM=[AppDomain]::CurrentDomain."DefineDynami`cAssembly"(1,1)."DefineDynami`cModule"(1); $Z=[uintptr]::size
 0..5|% {$D += $DM."Defin`eType"("AveYo_$_",1179913,[ValueType])}; $D += [uintptr]; 4..6|% {$D += $D[$_]."MakeByR`efType"()}
@@ -63,75 +50,58 @@ if ($11bug) {$path='^(l)'+$($cmd -replace '([\+\^\%\~\(\)\[\]])','{$1}')+'{ENTER
 L ($key-split'\\')[1] $LNK ''; $R=[diagnostics.process]::start($cmd,$arg); if ($R) {$R.PriorityClass='High'; $R.WaitForExit()}
 if ($11bug) {$w=0; do {if($w-gt40){break}; sleep -mi 250;$w++} until (Q); [Microsoft.VisualBasic.Interaction]::AppActivate($(Q))}
 if ($11bug) {[Windows.Forms.SendKeys]::SendWait($path)}; do {sleep 7} while(Q); L '.Default' $LNK 'Interactive User'
-'@; $V = ''; 'cmd', 'arg', 'id', 'key' | ForEach-Object { $V += "`n`$$_='$($(Get-Variable $_ -val)-replace"'","''")';" }; Set-ItemProperty $key $id $($V, $code) -type 7 -force -ea 0
-	Start-Process powershell -args "-win 1 -nop -c `n$V `$env:R=(gi `$key -ea 0).getvalue(`$id)-join''; iex `$env:R" -verb runas -Wait
+'@; $V='';'cmd','arg','id','key'|%{$V += "`n`$$_='$($(Get-Variable $_ -val)-replace"'","''")';"}; sp $key $id $($V, $code) -type 7 -force -ea 0
+	saps powershell -args "-win 1 -nop -c `n$V `$env:R=(gi `$key -ea 0).getvalue(`$id)-join''; iex `$env:R" -verb runas -Wait
 } # lean & mean snippet by AveYo, 2022.01.28
 
 Clear-Host
-Write-Host "1. Services: Off"
-Write-Host "2. Services: Default"
-while ($true) {
-    $choice = Read-Host " "
-    if ($choice -match '^[1-2]$') {
-		switch ($choice) {
-			1 {
-			
-				Clear-Host
-				Write-Host "Services: Off . . ."
-						
-				try {
-					[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-					(Invoke-RestMethod 'https://api.github.com/repos/QuakedK/Service-Destroyer/releases/latest' -Headers @{ 'User-Agent'='PowerShell' } -ErrorAction SilentlyContinue).assets |
-				    Where-Object Name -like 'Service-Destroyer-V*.bat' |
-				    Select-Object -First 1 |
-				    ForEach-Object {
-						Invoke-WebRequest -Uri $_.browser_download_url -OutFile (Join-Path $env:TEMP $_.name) -ErrorAction SilentlyContinue
-						Start-Process -FilePath (Join-Path $env:TEMP $_.name)
-				    }
-				} catch {  
-				
-					if(-not(Test-Path "$env:TEMP\Services.ps1")){ 
-						Invoke-WebRequest 'https://github.com/FR33THYFR33THY/Ultimate-Windows-Optimization-Guide/raw/refs/heads/main/8%20Advanced/11%20Services.ps1' -OutFile "$env:TEMP\Services.ps1" -UseBasicParsing 
-					}					
-					(Get-Content "$env:TEMP\Services.ps1" -Raw)-replace'Read-Host.*','1'|Invoke-Expression
-															
-				}
-				
-				cmd /c "bcdedit /deletevalue safeboot >nul 2>&1"
-				exit
+Write-Host '1. Services: Off'
+Write-Host '2. Services: Default'
 
-			}
-			2 {
-				
-				Clear-Host
-				Write-Host "Services: Default . . ."
-				
-				if (Test-Path -LiteralPath 'C:\Service Destroyer\Reg Backup\ServicesBackup.reg') {				
-					RunAsTI cmd '/c reg import "C:\Service Destroyer\Reg Backup\ServicesBackup.reg" & reg add "HKLM\SYSTEM\CurrentControlSet\Control" /v SvcHostSplitThresholdInKB /t REG_DWORD /d 3670016 /f'
-				    Timeout /T 5 | Out-Null
-					Remove-Item -LiteralPath 'C:\Service Destroyer' -Recurse -Force -ErrorAction SilentlyContinue
-					
-				    Clear-Host
-				    Write-Host "Press any key to restart . . ."
-				    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")				
-				    cmd /c "bcdedit /deletevalue safeboot >nul 2>&1"
-				    shutdown -r -t 00
-				    exit
-				} else { 
-
-					if(-not(Test-Path "$env:TEMP\Services.ps1")){
-						Invoke-WebRequest 'https://github.com/FR33THYFR33THY/Ultimate-Windows-Optimization-Guide/raw/refs/heads/main/8%20Advanced/11%20Services.ps1' -OutFile "$env:TEMP\Services.ps1" -UseBasicParsing
-					}					
-					(Get-Content "$env:TEMP\Services.ps1" -Raw)-replace'Read-Host.*','2'|Invoke-Expression
-
-				}
+while($true){
+  $choice=Read-Host ' '
+  if($choice -match '^[1-2]$'){
+    switch($choice){
+      1{
+        Clear-Host
+		$progresspreference = 'silentlycontinue'
+        Write-Host 'Services: Off . . .'
+		
+        (irm https://api.github.com/repos/QuakedK/Service-Destroyer/releases/latest -H @{'User-Agent'='PowerShell'}).assets |
+        ? Name -like 'Service-Destroyer-V*.bat' | select -First 1 | %{$p=Join-Path $env:TEMP $_.name;iwr $_.browser_download_url -OutFile $p -ea 0;cmd /c $p}
+		
+        exit
+      }
+      2{
+        Clear-Host
+		$progresspreference = 'silentlycontinue'
+        Write-Host 'Services: Default . . .'
+		
+        reg add 'HKLM\SYSTEM\CurrentControlSet\Control' /v SvcHostSplitThresholdInKB /t REG_DWORD /d 380000 /f | Out-Null
+		
+        if(Test-Path 'C:\Service Destroyer\Reg Backup\ServicesBackup.reg'){
+          RunAsTI cmd '/c reg import "C:\Service Destroyer\Reg Backup\ServicesBackup.reg"';sleep 5;ri 'C:\Service Destroyer' -Recurse -Force -ea 0
 			
-			}
+          Clear-Host
+          Write-Host 'Press any key to restart . . .'
+          $null=$Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+          cmd /c 'bcdedit /deletevalue safeboot >nul 2>&1'
+          shutdown -r -t 0
+          exit
+        }else{
 			
-		} 
-	} else { Write-Host "Invalid input. Please select a valid option (1-2)." } 
-}		
-	
+          $ps1="$env:TEMP\Services.ps1"
+          if(!(Test-Path $ps1)){curl.exe -sSL -o $ps1 https://github.com/FR33THYFR33THY/Ultimate-Windows-Optimization-Guide/raw/refs/heads/main/8%20Advanced/11%20Services.ps1}
+          ((gc $ps1 -Raw)-replace 'Read-Host.*','2')|iex
+		  
+        }
+      }
+    }
+  }else{
+    Write-Host 'Invalid input. Please select a valid option (1-2).'
+  }
+}
+
 				
 
 

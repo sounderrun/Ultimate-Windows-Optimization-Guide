@@ -1,32 +1,25 @@
 <# : batch portion
 @echo off
-fltmc >nul || (powershell "Start -Verb RunAs '%~f0'" & exit) & cd /D "%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "[scriptblock]::Create((Get-Content -LiteralPath '%~f0' -Raw -Encoding UTF8)).Invoke(@(&{$args}%*))"
+setlocal DisableDelayedExpansion
+echo "%*"|find /i "-el">nul && set _elev=1
+set _PSarg="""%~f0""" -el
+setlocal EnableDelayedExpansion
+>nul 2>&1 fltmc || >nul 2>&1 net session || (
+    if not defined _elev (
+        powershell -NoProfile -Command "Start-Process cmd.exe -ArgumentList '/c', '!_PSarg!' -Verb RunAs" && exit /b 0
+        exit /b 1
+    )
+)
+where pwsh.exe>nul 2>&1 && set "PS1=pwsh" || set "PS1=powershell"
+%PS1% -nop -c "Get-Content '%~f0' -Raw | iex"
+goto :eof
 : end batch / begin powershell #>
 
-$Host.UI.RawUI.WindowTitle = ''
+$Host.UI.RawUI.WindowTitle = "Gamebar" + " (Administrator)"
 $Host.UI.RawUI.BackgroundColor = "Black"
 $Host.PrivateData.ProgressBackgroundColor = "Black"
 $Host.PrivateData.ProgressForegroundColor = "White"
 Clear-Host
-
-$ProgressPreference = 'SilentlyContinue'  
-$ErrorActionPreference = 'SilentlyContinue'
-
-function Get-FileFromWeb {
-    param($URL, $File)
-    $resp = [System.Net.HttpWebRequest]::Create($URL).GetResponse()
-    if ($resp.StatusCode -in 401, 403, 404) { return }
-    if (!(Split-Path $File)) { $File = Join-Path (Get-Location) $File }
-    $dir = [System.IO.Path]::GetDirectoryName($File)
-    if (!(Test-Path $dir)) { [void][System.IO.Directory]::CreateDirectory($dir) }
-    $buf = [byte[]]::new(1MB)
-    $r = $resp.GetResponseStream()
-    $w = [System.IO.File]::Open($File, 'Create')
-    while (($cnt = $r.Read($buf, 0, $buf.Length)) -gt 0) { $w.Write($buf, 0, $cnt) }
-    $r.Close(); $w.Close(); $resp.Close()
-}
 
 Write-Host "1. Gamebar Xbox: Off (Recommended)"
 Write-Host "2. Gamebar Xbox: Default"
@@ -35,10 +28,9 @@ while ($true) {
     if ($choice -match '^[1-2]$') {
         switch ($choice) {
             1 {
-	            Clear-Host
-
+	            Clear-Host			
+				$progresspreference = 'silentlycontinue'
 				# disable gamebar regedit
-				Write-Output "Disabling Game Bar . . ."
 				reg add "HKCU\System\GameConfigStore" /v "GameDVR_Enabled" /t REG_DWORD /d "0" /f | Out-Null
 				reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\GameDVR" /v "AppCaptureEnabled" /t REG_DWORD /d "0" /f | Out-Null
 				# disable open xbox game bar using game controller regedit
@@ -54,8 +46,8 @@ while ($true) {
 				# disable xbox live game save service regedit
 				reg add "HKLM\SYSTEM\ControlSet001\Services\XblGameSave" /v "Start" /t REG_DWORD /d "4" /f | Out-Null
 				# disable xbox live networking service regedit
-				reg add "HKLM\SYSTEM\ControlSet001\Services\XboxNetApiSvc" /v "Start" /t REG_DWORD /d "4" /f | Out-Null			
-				# disable ms-gamebar notifications with xbox controller plugged in regedit	
+				reg add "HKLM\SYSTEM\ControlSet001\Services\XboxNetApiSvc" /v "Start" /t REG_DWORD /d "4" /f | Out-Null
+				# disable ms-gamebar notifications with xbox controller plugged in regedit
 				# create reg file
 				$MultilineComment = @"
 Windows Registry Editor Version 5.00	
@@ -85,36 +77,22 @@ Windows Registry Editor Version 5.00
 [HKEY_CLASSES_ROOT\ms-gamingoverlay\shell\open\command]	
 @="\"%SystemRoot%\\System32\\systray.exe\""	
 "@
-				Set-Content -Path "$env:TEMP\MsGamebarNotiOff.reg" -Value $MultilineComment -Force
 				# import reg file
-				Regedit.exe /S "$env:TEMP\MsGamebarNotiOff.reg"				
-				# stop gamebar running
-				Stop-Process -Force -Name GameBar | Out-Null			    
-				# Remove Gamebar & Xbox apps
-				# GAMEBAR
-				Write-Output "Removing Gamebar App . . ."
-				Get-AppxPackage -allusers *Microsoft.XboxGameOverlay* | Remove-AppxPackage
-				Get-AppxPackage -allusers *Microsoft.XboxGamingOverlay* | Remove-AppxPackage
-				# XBOX
-				Write-Output "Removing Xbox App . . ."
-				Get-AppxPackage -allusers *Microsoft.GamingApp* | Remove-AppxPackage
-				Get-AppxPackage -allusers *Microsoft.Xbox.TCUI* | Remove-AppxPackage
-				Get-AppxPackage -allusers *Microsoft.XboxApp* | Remove-AppxPackage
-				Get-AppxPackage -allusers *Microsoft.XboxIdentityProvider* | Remove-AppxPackage
-				Get-AppxPackage -allusers *Microsoft.XboxSpeechToTextOverlay* | Remove-AppxPackage		    
-				# Remove Gaming Services
-				Write-Output "Removing Gaming Services . . ."
-				Get-AppxPackage -allusers *Microsoft.GamingServices* | Remove-AppxPackage
-
+				Set-Content -Path "$env:TEMP\MsGamebarNotiOff.reg" -Value $MultilineComment -Force; reg import "$env:TEMP\MsGamebarNotiOff.reg" *> $null								
+				# stop gamebar and GameInput running
+				$stop = "GameBar", "GameBarFTServer", "gamingservices", "gamingservicesnet", "GameInputSVC"; $stop | % { Stop-Process -Name $_ -Force -ea 0 }
+				# uninstall gamebar & xbox apps
+				Get-AppxPackage | ? { $_.Name -match 'Xbox|Gaming' } | Remove-AppxPackage -ea 0
+				# uninstall gameinput
+				$gameInput = Get-Package -ProviderName Programs -Name "*GameInput*" -ea 0;if ($gameInput) { $gameInput | Uninstall-Package -Force -ea 0 | Out-Null }
 				Write-Host "Restart to apply . . ."
 				$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 				Start-Process ms-settings:gaming-gamebar
 				exit
-				
 			}
 			2 {
-
-				Clear-Host	
+				Clear-Host
+				$progresspreference = 'silentlycontinue'
 				# gamebar regedit
 				reg add "HKCU\System\GameConfigStore" /v "GameDVR_Enabled" /t REG_DWORD /d "1" /f | Out-Null
 				reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\GameDVR" /v "AppCaptureEnabled" /t REG_DWORD /d "1" /f | Out-Null
@@ -149,47 +127,51 @@ Windows Registry Editor Version 5.00
 				Set-Content -Path "$env:TEMP\MsGamebarNotiOn.reg" -Value $MultilineComment -Force
 				# import reg file
 				Regedit.exe /S "$env:TEMP\MsGamebarNotiOn.reg"
-				# install store, gamebar & xbox apps
-				Get-AppXPackage -AllUsers *Microsoft.GamingApp* | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register -ErrorAction SilentlyContinue "$($_.InstallLocation)\AppXManifest.xml"}
-				Get-AppXPackage -AllUsers *Microsoft.Xbox.TCUI* | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register -ErrorAction SilentlyContinue "$($_.InstallLocation)\AppXManifest.xml"}
-				Get-AppXPackage -AllUsers *Microsoft.XboxApp* | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register -ErrorAction SilentlyContinue "$($_.InstallLocation)\AppXManifest.xml"}
-				Get-AppXPackage -AllUsers *Microsoft.XboxGameOverlay* | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register -ErrorAction SilentlyContinue "$($_.InstallLocation)\AppXManifest.xml"}
-				Get-AppXPackage -AllUsers *Microsoft.XboxGamingOverlay* | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register -ErrorAction SilentlyContinue "$($_.InstallLocation)\AppXManifest.xml"}
-				Get-AppXPackage -AllUsers *Microsoft.XboxIdentityProvider* | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register -ErrorAction SilentlyContinue "$($_.InstallLocation)\AppXManifest.xml"}
-				Get-AppXPackage -AllUsers *Microsoft.XboxSpeechToTextOverlay* | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register -ErrorAction SilentlyContinue "$($_.InstallLocation)\AppXManifest.xml"}
-				Get-AppXPackage -AllUsers *Microsoft.WindowsStore* | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register -ErrorAction SilentlyContinue "$($_.InstallLocation)\AppXManifest.xml"}
-				Get-AppXPackage -AllUsers *Microsoft.Microsoft.StorePurchaseApp * | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register -ErrorAction SilentlyContinue "$($_.InstallLocation)\AppXManifest.xml"}
-				# download gamebar repair tool
-				Get-FileFromWeb -URL "https://aka.ms/GamingRepairTool" -File "$env:TEMP\GamingRepairTool.exe"
-				Clear-Host
-				# start gamebar repair too
-				Start-Process -wait "$env:TEMP\GamingRepairTool.exe"
-				# FIX XBOX SIGN IN
+				# install store, gamebar, xbox & gaming services apps
+				'Store','Xbox','Gaming' | % { Get-AppxPackage -AllUsers "*$_*" | % { Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml" -ea 0 } }
+				# install gameinput
+				if (gcm winget -ea 0) {
+				    winget list --id Microsoft.GameInput -e *>$null
+				    if ($LASTEXITCODE -eq 0) { winget uninstall --id Microsoft.GameInput -e -h --accept-source-agreements *>$null }
+				} else {
+					# download and install 7zip
+					$asset = (irm "https://api.github.com/repos/ip7z/7zip/releases/latest").assets | ? { $_.name -like "*x64.exe" } | select -First 1
+					$exe = Join-Path $env:TEMP $asset.name
+					curl.exe -sS -L -o $exe $asset.browser_download_url
+					saps -Wait $exe -ArgumentList '/S'
+					# download GameInput package
+					$v = (irm https://api.nuget.org/v3-flatcontainer/microsoft.gameinput/index.json).versions[-1]
+					$url = "https://api.nuget.org/v3-flatcontainer/microsoft.gameinput/$v/microsoft.gameinput.$v.nupkg"
+					$pkgPath = "$env:TEMP\microsoft.gameinput.$v.nupkg"
+					$dst = "$env:TEMP\GameInputPkg"
+					curl.exe -sS -L -o $pkgPath $url
+					# extract with 7zip
+					& "C:\Program Files\7-Zip\7z.exe" x $pkgPath "-o$dst" -y | Out-Null
+					# start GameInput installer
+					$msi = "$env:TEMP\GameInputPkg\redist\GameInputRedist.msi"; saps msiexec.exe -Wait -ArgumentList "/i",$msi,"/quiet","/norestart"
+				}
+				# fix xbox sign in
 				# enable UAC
-				New-Item -Path "Registry::HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -ErrorAction SilentlyContinue | Out-Null
-				New-ItemProperty -Path "Registry::HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableLUA" -value "1" -PropertyType Dword -ErrorAction SilentlyContinue | Out-Null
-				Set-ItemProperty -Path "Registry::HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableLUA" -value "1" -ErrorAction SilentlyContinue | Out-Null
+				New-Item -Path "Registry::HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -ea 0 | Out-Null
+				New-ItemProperty -Path "Registry::HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableLUA" -value "1" -PropertyType Dword -ea 0 | Out-Null
+				Set-ItemProperty -Path "Registry::HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableLUA" -value "1" -ea 0 | Out-Null
+				# stop edge running
+				$stop = "MicrosoftEdgeUpdate", "OneDrive", "WidgetService", "Widgets", "msedge", "Resume", "CrossDeviceResume", "msedgewebview2"
+				$stop | % { Stop-Process -Name $_ -Force -ea 0 }
+				# clear edge blocks
+				& {$(Invoke-RestMethod "https://github.com/he3als/EdgeRemover/raw/refs/heads/main/ClearUpdateBlocks.ps1")} -Silent | Out-Null
 				# download edge webview installer
-				Write-Host "Installing: Edge Webview . . ."
-				# fix edge blocks
-				. ([ScriptBlock]::Create((Invoke-RestMethod 'https://github.com/ManuelBiscotti/test/raw/refs/heads/main/functions/Invoke-EdgeFix.ps1')))
-				Invoke-EdgeFix
-				# download edgewebview2
-				Get-FileFromWeb -URL "https://msedge.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/304fddef-b073-4e0a-b1ff-c2ea02584017/MicrosoftEdgeWebview2Setup.exe" -File "$env:TEMP\EdgeWebView.exe"
-				Clear-Host
+				curl.exe -sS -L -o "$env:TEMP\MicrosoftEdgeWebview2Setup.exe" "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
 				# start edge webview installer
-				Start-Process -wait "$env:TEMP\EdgeWebView.exe"
-				# GAMING SERVICE
-				# Install Gaming Service App
-				Write-Host "Installing: Gaming Services . . ."
-				Get-AppXPackage -AllUsers *Microsoft.GamingServices* | ForEach-Object {Add-AppxPackage -DisableDevelopmentMode -Register -ErrorAction SilentlyContinue "$($_.InstallLocation)\AppXManifest.xml"}
-
-                Clear-Host
+				saps -Wait "$env:TEMP\MicrosoftEdgeWebview2Setup.exe" -ArgumentList "/silent /install"
+				# download gamebar repair tool
+				curl.exe -sS -L -o "$env:TEMP\GamingRepairTool.exe" "https://aka.ms/GamingRepairTool"
+				# start gamebar repair tool
+				saps -wait "$env:TEMP\GamingRepairTool.exe"
                 Write-Host "Restart to apply . . ."
                 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
                 Start-Process ms-settings:gaming-gamebar
                 exit
-				
             }
         } 
     } else { Write-Host "Invalid input. Please select a valid option (1-2)." } 

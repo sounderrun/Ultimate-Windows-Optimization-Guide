@@ -1,39 +1,29 @@
 <# : batch portion
+@setlocal DisableDelayedExpansion
 @echo off
-fltmc >nul || (powershell "Start -Verb RunAs '%~f0'" & exit) & cd /D "%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "[scriptblock]::Create((Get-Content -LiteralPath '%~f0' -Raw -Encoding UTF8)).Invoke(@(&{$args}%*))"
+Color 0F
+echo "%*"|find /i "-el" >nul && set _elev=1
+set arg="""%~f0""" -el
+setlocal EnableDelayedExpansion
+>nul 2>&1 fltmc || >nul 2>&1 net session || (
+    if not defined _elev (
+		powershell -nop -c "saps cmd.exe '/c', '!arg!' -Verb RunAs" >nul 2>&1 && exit /b 0
+	)
+	echo.
+	echo This script require administrator privileges.
+	echo To do so, right click on this script and select 'Run as administrator'.
+	pause
+    exit 1
+)
+where pwsh.exe >nul 2>&1 && set "ps1=pwsh" || set "ps1=powershell"
+%ps1% -nop -ep Bypass -c "Get-Content '%~f0' -Raw | iex"
+goto :eof
 : end batch / begin powershell #>
 
-$Host.UI.RawUI.WindowTitle = $myInvocation.MyCommand.Definition + " (Administrator)"
-$Host.UI.RawUI.BackgroundColor = "Black"
-$Host.PrivateData.ProgressBackgroundColor = "Black"
-$Host.PrivateData.ProgressForegroundColor = "White"
-Clear-Host
+$Host.UI.RawUI.WindowTitle = 'Updates (Administrator)'
 
 function RunAsTI($cmd, $arg) {
-
-	<#
-	  [FEATURES]
-	  - innovative HKCU load, no need for reg load / unload ping-pong; programs get the user profile
-	  - sets ownership privileges, high priority, and explorer support; get System if TI unavailable
-	  - accepts special characters in paths for which default run as administrator fails
-	  - can copy-paste snippet directly in powershell console then use it manually
-	  [USAGE]
-	  - First copy-paste RunAsTI snippet before .ps1 script content
-	  - Then call it anywhere after to launch programs with arguments as TI
-	    RunAsTI regedit
-	    RunAsTI powershell '-noprofile -nologo -noexit -c [environment]::Commandline'
-	    RunAsTI cmd '/k "whoami /all & color e0"'
-	    RunAsTI "C:\System Volume Information"
-	  - Or just relaunch the script once if not already running as TI:
-	    if (((whoami /user)-split' ')[-1]-ne'S-1-5-18') {
-	      RunAsTI powershell "-f $($MyInvocation.MyCommand.Path) $($args[0]) $($args[1..99])"; return
-	    }
-	  2022.01.28: workaround for 11 release (22000) hindering explorer as TI
-	#>
-
-    $id = 'RunAsTI'; $key = "Registry::HKU\$(((whoami /user)-split' ')[-1])\Volatile Environment"; $code = @'
+	$id = 'RunAsTI'; $key = "Registry::HKU\$(((whoami /user)-split' ')[-1])\Volatile Environment"; $code = @'
 $I=[int32]; $M=$I.module.gettype("System.Runtime.Interop`Services.Mar`shal"); $P=$I.module.gettype("System.Int`Ptr"); $S=[string]
 $D=@(); $T=@(); $DM=[AppDomain]::CurrentDomain."DefineDynami`cAssembly"(1,1)."DefineDynami`cModule"(1); $Z=[uintptr]::size
 0..5|% {$D += $DM."Defin`eType"("AveYo_$_",1179913,[ValueType])}; $D += [uintptr]; 4..6|% {$D += $D[$_]."MakeByR`efType"()}
@@ -60,96 +50,65 @@ if ($11bug) {$path='^(l)'+$($cmd -replace '([\+\^\%\~\(\)\[\]])','{$1}')+'{ENTER
 L ($key-split'\\')[1] $LNK ''; $R=[diagnostics.process]::start($cmd,$arg); if ($R) {$R.PriorityClass='High'; $R.WaitForExit()}
 if ($11bug) {$w=0; do {if($w-gt40){break}; sleep -mi 250;$w++} until (Q); [Microsoft.VisualBasic.Interaction]::AppActivate($(Q))}
 if ($11bug) {[Windows.Forms.SendKeys]::SendWait($path)}; do {sleep 7} while(Q); L '.Default' $LNK 'Interactive User'
-'@; $V = ''; 'cmd', 'arg', 'id', 'key' | ForEach-Object { $V += "`n`$$_='$($(Get-Variable $_ -val)-replace"'","''")';" }; Set-ItemProperty $key $id $($V, $code) -type 7 -force -ea 0
-	Start-Process powershell -args "-win 1 -nop -c `n$V `$env:R=(gi `$key -ea 0).getvalue(`$id)-join''; iex `$env:R" -verb runas -Wait
+'@; $V='';'cmd','arg','id','key'|%{$V += "`n`$$_='$($(Get-Variable $_ -val)-replace"'","''")';"}; sp $key $id $($V, $code) -type 7 -force -ea 0
+	saps powershell -args "-win 1 -nop -c `n$V `$env:R=(gi `$key -ea 0).getvalue(`$id)-join''; iex `$env:R" -verb runas -Wait
 } # lean & mean snippet by AveYo, 2022.01.28
 
-$ProgressPreference = 'SilentlyContinue'  
-$ErrorActionPreference = 'SilentlyContinue'
-
-Write-Host "1. Updates: Off"
-Write-Host "2. Updates: Default"
+Write-Host '1. Updates: Off'
+Write-Host '2. Updates: Default'
 	while ($true) {
-    $choice = Read-Host " "
+    $choice = Read-Host ' '
     if ($choice -match '^[1-2]$') {
 		switch ($choice) {
 			1 {
+				Clear-Host
+				$ProgressPreference = 'SilentlyContinue'
+				Write-Host 'Updates: Off. Please wait . . .'
+				
+				# download tsgrgo Windows Update Disabler
+				$zip="$env:TEMP\wud.zip";$dir="$env:TEMP\windows-update-disabler-main";$bat="$dir\disable updates.bat"
+				curl.exe -sSL -o $zip https://github.com/tsgrgo/windows-update-disabler/releases/latest/download/windows-update-disabler-main.zip
+				# extract files
+				Expand-Archive $zip $env:TEMP -Force
+				# edit batch file
+				(gc $bat)|?{$_ -notmatch 'if not "%[12]"=="(admin|system)"' -and $_ -notmatch '^\s*pause\s*$'}|sc $bat -Encoding ASCII
+				# disable updates RunAsTI
+				RunAsTI $bat; do{sleep 2}while(gwmi Win32_Process -Filter "Name='cmd.exe'"|? CommandLine -like '*disable updates.bat*')
+				# hide updates settings
+				ni HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer -Force | Out-Null
+				sp HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer SettingsPageVisibility "hide:windowsupdate"
+				gps SystemSettings,Settings -ea 0|%{kill $_ -Force -ea 0}
 				
 				Clear-Host
-				Write-Host "Updates: Off. Please wait . . ."
-				
-				# Disable Windows Update
-				$zip = Join-Path $env:TEMP 'windows-update-disabler-main.zip'
-				$batch = Join-Path $env:TEMP 'windows-update-disabler-main\disable updates.bat'
-			    
-				Invoke-WebRequest -Uri 'https://github.com/tsgrgo/windows-update-disabler/releases/latest/download/windows-update-disabler-main.zip' -OutFile $zip
-				Expand-Archive -Path $zip -DestinationPath "$env:TEMP" -Force
-			    
-				(Get-Content $batch) | Where-Object {
-					$_ -notmatch 'if not "%1"=="admin"' -and
-					$_ -notmatch 'if not "%2"=="system"' -and
-					$_ -notmatch '^\s*pause\s*$'
-				} | Set-Content -Path $batch -Encoding ASCII
-			    
-				RunAsTI $batch ""
-			    
-				# Wait for process completion
-				do {
-					Start-Sleep -Seconds 2
-					$running = Get-WmiObject Win32_Process -Filter "Name='cmd.exe'" 2>$null |
-				    	Where-Object { $_.CommandLine -like "*disable updates.bat*" }
-				} while ($running)
-			    
-				# Hide Windows Update settings
-				if (-not (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer')) { New-Item 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer' -Force | Out-Null }			
-				Set-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer' -Name 'SettingsPageVisibility' -Value 'hide:windowsupdate' -Type String -Force
-				Get-Process -Name "SystemSettings","Settings" -ErrorAction SilentlyContinue | ForEach-Object { $_ | Stop-Process -Force -ErrorAction SilentlyContinue }
-				
-				Clear-Host
-				Write-Host "Restart to apply . . ."
-				$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-				Start-Process ms-settings:windowsupdate
+				Write-Host 'Restart to apply . . .'
+				$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+				saps ms-settings:windowsupdate
 				exit
-				
 			}
 			2 {
-
 				Clear-Host
-		        Write-Host "Updates: Default. Please wait . . ."
+				$ProgressPreference = 'SilentlyContinue'
+		        Write-Host 'Updates: Default. Please wait . . .'
 				
-				# Enable Windows Update
-		        $zip = Join-Path $env:TEMP 'windows-update-disabler-main.zip'
-		        $batch = Join-Path $env:TEMP 'windows-update-disabler-main\enable updates.bat'
-	            
-		        Invoke-WebRequest -Uri 'https://github.com/tsgrgo/windows-update-disabler/releases/latest/download/windows-update-disabler-main.zip' -OutFile $zip
-		        Expand-Archive -Path $zip -DestinationPath "$env:TEMP" -Force
-	            
-		        (Get-Content $batch) | Where-Object {
-		        	$_ -notmatch 'if not "%1"=="admin"' -and
-		        	$_ -notmatch 'if not "%2"=="system"' -and
-		        	$_ -notmatch '^\s*pause\s*$'
-		        } | Set-Content -Path $batch -Encoding ASCII
-	            
-		        RunAsTI $batch ""
-	            
-		        # Wait for process completion
-		        do {
-		        	Start-Sleep -Seconds 2
-		        	$running = Get-WmiObject Win32_Process -Filter "Name='cmd.exe'" 2>$null |
-		            	Where-Object { $_.CommandLine -like "*enable updates.bat*" }
-		        } while ($running)
-	            
-		        # Show Windows Update settings
-				Remove-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "SettingsPageVisibility" -ErrorAction SilentlyContinue
-				Get-Process -Name "SystemSettings","Settings" -ErrorAction SilentlyContinue | ForEach-Object { $_ | Stop-Process -Force -ErrorAction SilentlyContinue }
-
+				# download tsgrgo Windows Update Disabler
+				$zip="$env:TEMP\wud.zip";$dir="$env:TEMP\windows-update-disabler-main";$bat="$dir\enable updates.bat"
+				curl.exe -sSL -o $zip https://github.com/tsgrgo/windows-update-disabler/releases/latest/download/windows-update-disabler-main.zip
+				# extract files
+				Expand-Archive $zip $env:TEMP -Force
+				# edit batch file
+				(gc $bat)|?{$_ -notmatch 'if not "%[12]"=="(admin|system)"' -and $_ -notmatch '^\s*pause\s*$'}|sc $bat -Encoding ASCII
+				# enable updates RunAsTI
+				RunAsTI $bat; do{sleep 2}while(gwmi Win32_Process -Filter "Name='cmd.exe'"|? CommandLine -like '*enable updates.bat*')
+				# show updates settings
+				rp HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer SettingsPageVisibility -ea 0
+				gps SystemSettings,Settings -ea 0|%{kill $_ -Force -ea 0}
+				
 				Clear-Host
-				Write-Host "Restart to apply . . ."
-				$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-				Start-Process ms-settings:windowsupdate
+				Write-Host 'Restart to apply . . .'
+				$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+				saps ms-settings:windowsupdate
 				exit
-				
 			}
 		} 
-	} else { Write-Host "Invalid input. Please select a valid option (1-2)." } 
+	} else { Write-Host 'Invalid input. Please select a valid option (1-2).' } 
 }

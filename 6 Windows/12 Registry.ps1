@@ -1,18 +1,91 @@
 <# : batch portion
 @echo off
-fltmc >nul || (powershell "Start -Verb RunAs '%~f0'" & exit) & cd /D "%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "[scriptblock]::Create((Get-Content -LiteralPath '%~f0' -Raw -Encoding UTF8)).Invoke(@(&{$args}%*))"
+setlocal DisableDelayedExpansion
+echo "%*"|find /i "-el">nul && set _elev=1
+set _PSarg="""%~f0""" -el
+setlocal EnableDelayedExpansion
+>nul 2>&1 fltmc || >nul 2>&1 net session || (
+    if not defined _elev (
+        powershell -NoProfile -Command "Start-Process cmd.exe -ArgumentList '/c', '!_PSarg!' -Verb RunAs" && exit /b 0
+        exit /b 1
+    )
+)
+where pwsh.exe>nul 2>&1 && set "PS1=pwsh" || set "PS1=powershell"
+%PS1% -nop -c "Get-Content '%~f0' -Raw | iex"
+goto :eof
 : end batch / begin powershell #>
 
-$Host.UI.RawUI.WindowTitle = ''
+$Host.UI.RawUI.WindowTitle = $myInvocation.MyCommand.Definition + " (Administrator)"
 $Host.UI.RawUI.BackgroundColor = "Black"
 $Host.PrivateData.ProgressBackgroundColor = "Black"
 $Host.PrivateData.ProgressForegroundColor = "White"
 Clear-Host
 
-$ProgressPreference = 'SilentlyContinue'  
-$ErrorActionPreference = 'SilentlyContinue'
+    function RunAsTI($cmd, $arg) {
+    $id = 'RunAsTI'; $key = "Registry::HKU\$(((whoami /user)-split' ')[-1])\Volatile Environment"; $code = @'
+    $I=[int32]; $M=$I.module.gettype("System.Runtime.Interop`Services.Mar`shal"); $P=$I.module.gettype("System.Int`Ptr"); $S=[string]
+    $D=@(); $T=@(); $DM=[AppDomain]::CurrentDomain."DefineDynami`cAssembly"(1,1)."DefineDynami`cModule"(1); $Z=[uintptr]::size
+    0..5|% {$D += $DM."Defin`eType"("AveYo_$_",1179913,[ValueType])}; $D += [uintptr]; 4..6|% {$D += $D[$_]."MakeByR`efType"()}
+    $F='kernel','advapi','advapi', ($S,$S,$I,$I,$I,$I,$I,$S,$D[7],$D[8]), ([uintptr],$S,$I,$I,$D[9]),([uintptr],$S,$I,$I,[byte[]],$I)
+    0..2|% {$9=$D[0]."DefinePInvok`eMethod"(('CreateProcess','RegOpenKeyEx','RegSetValueEx')[$_],$F[$_]+'32',8214,1,$S,$F[$_+3],1,4)}
+    $DF=($P,$I,$P),($I,$I,$I,$I,$P,$D[1]),($I,$S,$S,$S,$I,$I,$I,$I,$I,$I,$I,$I,[int16],[int16],$P,$P,$P,$P),($D[3],$P),($P,$P,$I,$I)
+    1..5|% {$k=$_; $n=1; $DF[$_-1]|% {$9=$D[$k]."Defin`eField"('f' + $n++, $_, 6)}}; 0..5|% {$T += $D[$_]."Creat`eType"()}
+    0..5|% {nv "A$_" ([Activator]::CreateInstance($T[$_])) -fo}; function F ($1,$2) {$T[0]."G`etMethod"($1).invoke(0,$2)}
+    $TI=(whoami /groups)-like'*1-16-16384*'; $As=0; if(!$cmd) {$cmd='control';$arg='admintools'}; if ($cmd-eq'This PC'){$cmd='file:'}
+    if (!$TI) {'TrustedInstaller','lsass','winlogon'|% {if (!$As) {$9=sc.exe start $_; $As=@(get-process -name $_ -ea 0|% {$_})[0]}}
+    function M ($1,$2,$3) {$M."G`etMethod"($1,[type[]]$2).invoke(0,$3)}; $H=@(); $Z,(4*$Z+16)|% {$H += M "AllocHG`lobal" $I $_}
+    M "WriteInt`Ptr" ($P,$P) ($H[0],$As.Handle); $A1.f1=131072; $A1.f2=$Z; $A1.f3=$H[0]; $A2.f1=1; $A2.f2=1; $A2.f3=1; $A2.f4=1
+    $A2.f6=$A1; $A3.f1=10*$Z+32; $A4.f1=$A3; $A4.f2=$H[1]; M "StructureTo`Ptr" ($D[2],$P,[boolean]) (($A2 -as $D[2]),$A4.f2,$false)
+    $Run=@($null, "powershell -win 1 -nop -c iex `$env:R; # $id", 0, 0, 0, 0x0E080600, 0, $null, ($A4 -as $T[4]), ($A5 -as $T[5]))
+    F 'CreateProcess' $Run; return}; $env:R=''; rp $key $id -force; $priv=[diagnostics.process]."GetM`ember"('SetPrivilege',42)[0]
+    'SeSecurityPrivilege','SeTakeOwnershipPrivilege','SeBackupPrivilege','SeRestorePrivilege' |% {$priv.Invoke($null, @("$_",2))}
+    $HKU=[uintptr][uint32]2147483651; $NT='S-1-5-18'; $reg=($HKU,$NT,8,2,($HKU -as $D[9])); F 'RegOpenKeyEx' $reg; $LNK=$reg[4]
+    function L ($1,$2,$3) {sp 'HKLM:\Software\Classes\AppID\{CDCBCFCA-3CDC-436f-A4E2-0E02075250C2}' 'RunAs' $3 -force -ea 0
+    $b=[Text.Encoding]::Unicode.GetBytes("\Registry\User\$1"); F 'RegSetValueEx' @($2,'SymbolicLinkValue',0,6,[byte[]]$b,$b.Length)}
+    function Q {[int](gwmi win32_process -filter 'name="explorer.exe"'|?{$_.getownersid().sid-eq$NT}|select -last 1).ProcessId}
+    $11bug=($((gwmi Win32_OperatingSystem).BuildNumber)-eq'22000')-AND(($cmd-eq'file:')-OR(test-path -lit $cmd -PathType Container))
+    if ($11bug) {'System.Windows.Forms','Microsoft.VisualBasic' |% {[Reflection.Assembly]::LoadWithPartialName("'$_")}}
+    if ($11bug) {$path='^(l)'+$($cmd -replace '([\+\^\%\~\(\)\[\]])','{$1}')+'{ENTER}'; $cmd='control.exe'; $arg='admintools'}
+    L ($key-split'\\')[1] $LNK ''; $R=[diagnostics.process]::start($cmd,$arg); if ($R) {$R.PriorityClass='High'; $R.WaitForExit()}
+    if ($11bug) {$w=0; do {if($w-gt40){break}; sleep -mi 250;$w++} until (Q); [Microsoft.VisualBasic.Interaction]::AppActivate($(Q))}
+    if ($11bug) {[Windows.Forms.SendKeys]::SendWait($path)}; do {sleep 7} while(Q); L '.Default' $LNK 'Interactive User'
+'@; $V = ''; 'cmd', 'arg', 'id', 'key' | ForEach-Object { $V += "`n`$$_='$($(Get-Variable $_ -val)-replace"'","''")';" }; Set-ItemProperty $key $id $($V, $code) -type 7 -force -ea 0
+    Start-Process powershell -args "-win 1 -nop -c `n$V `$env:R=(gi `$key -ea 0).getvalue(`$id)-join''; iex `$env:R" -verb runas -Wait
+    }
+
+    function Get-FileFromWeb {
+    param ([Parameter(Mandatory)][string]$URL, [Parameter(Mandatory)][string]$File)
+    function Show-Progress {
+    param ([Parameter(Mandatory)][Single]$TotalValue, [Parameter(Mandatory)][Single]$CurrentValue, [Parameter(Mandatory)][string]$ProgressText, [Parameter()][int]$BarSize = 10, [Parameter()][switch]$Complete)
+    $percent = $CurrentValue / $TotalValue
+    $percentComplete = $percent * 100
+    if ($psISE) { Write-Progress "$ProgressText" -id 0 -percentComplete $percentComplete }
+    else { Write-Host -NoNewLine "`r$ProgressText $(''.PadRight($BarSize * $percent, [char]9608).PadRight($BarSize, [char]9617)) $($percentComplete.ToString('##0.00').PadLeft(6)) % " }
+    }
+    try {
+    $request = [System.Net.HttpWebRequest]::Create($URL)
+    $response = $request.GetResponse()
+    if ($response.StatusCode -eq 401 -or $response.StatusCode -eq 403 -or $response.StatusCode -eq 404) { throw "Remote file either doesn't exist, is unauthorized, or is forbidden for '$URL'." }
+    if ($File -match '^\.\\') { $File = Join-Path (Get-Location -PSProvider 'FileSystem') ($File -Split '^\.')[1] }
+    if ($File -and !(Split-Path $File)) { $File = Join-Path (Get-Location -PSProvider 'FileSystem') $File }
+    if ($File) { $fileDirectory = $([System.IO.Path]::GetDirectoryName($File)); if (!(Test-Path($fileDirectory))) { [System.IO.Directory]::CreateDirectory($fileDirectory) | Out-Null } }
+    [long]$fullSize = $response.ContentLength
+    [byte[]]$buffer = new-object byte[] 1048576
+    [long]$total = [long]$count = 0
+    $reader = $response.GetResponseStream()
+    $writer = new-object System.IO.FileStream $File, 'Create'
+    do {
+    $count = $reader.Read($buffer, 0, $buffer.Length)
+    $writer.Write($buffer, 0, $count)
+    $total += $count
+    if ($fullSize -gt 0) { Show-Progress -TotalValue $fullSize -CurrentValue $total -ProgressText " $($File.Name)" }
+    } while ($count -gt 0)
+    }
+    finally {
+    $reader.Close()
+    $writer.Close()
+    }
+    }
 
 Write-Host "1. Registry: Optimize (Recommended)"
 Write-Host "2. Registry: Default"
@@ -25,77 +98,43 @@ while ($true) {
 				Clear-Host
 				$progresspreference = 'silentlycontinue'
 				Write-Host "Registry: Optimize . . ."
-				# create reg file
-				$MultilineComment = @"
+# FR33THY
+$scriptContent = (Invoke-WebRequest "https://github.com/FR33THYFR33THY/Ultimate-Windows-Optimization-Guide/raw/refs/heads/main/6%20Windows/12%20Registry.ps1" -UseBasicParsing).Content
+$scriptContent = $scriptContent -replace 'Write-Host "Restart to apply \. \. \."\s*\$\w+ = \$Host\.UI\.RawUI\.ReadKey\("NoEcho,IncludeKeyDown"\)', '' 
+$scriptContent = $scriptContent -replace 'exit', ''
+$scriptContent = $scriptContent -replace 'show-menu', ''
+if ($scriptContent -match '1 \{\s*([\s\S]*?)\s*\}\s*2 \{') {
+    $option1Code = $matches[1]
+    Invoke-Expression $option1Code *> $null
+} else {Write-Host "Failed to extract option 1 code" -ForegroundColor Red}
+
+# My Overrides
+# create reg file
+$MultilineComment = @'
 Windows Registry Editor Version 5.00
 
-; --LEGACY CONTROL PANEL--
+; remove activate windows watermark
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\SoftwareProtectionPlatform]
+"Activation"=dword:00000000
 
+; disable onedrive startup
+[-HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run]
+"OneDrive"=-
 
+; Disabling Media Player telemetry
+[HKEY_CURRENT_USER\Software\Policies\Microsoft\WindowsMediaPlayer]
+"PreventCDDVDMetadataRetrieval"=dword:00000001
+"PreventMusicFileMetadataRetrieval"=dword:00000001
+"PreventRadioPresetsRetrieval"=dword:00000001
 
+; prevent-media-sharing
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\WindowsMediaPlayer]
+"PreventLibrarySharing"=dword:00000001
 
-; EASE OF ACCESS
-; disable narrator
-[HKEY_CURRENT_USER\Software\Microsoft\Narrator\NoRoam]
-"DuckAudio"=dword:00000000
-"WinEnterLaunchEnabled"=dword:00000000
-"ScriptingEnabled"=dword:00000000
-"OnlineServicesEnabled"=dword:00000000
+;prevent-windows-media-drm-internet-access-reg
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\WMDRM]
+"DisableOnline"=dword:00000001
 
-[HKEY_CURRENT_USER\Software\Microsoft\Narrator]
-"NarratorCursorHighlight"=dword:00000000
-"CoupleNarratorCursorKeyboard"=dword:00000000
-
-; disable ease of access settings 
-[HKEY_CURRENT_USER\Software\Microsoft\Ease of Access]
-"selfvoice"=dword:00000000
-"selfscan"=dword:00000000
-
-[HKEY_CURRENT_USER\Control Panel\Accessibility]
-"Sound on Activation"=dword:00000000
-"Warning Sounds"=dword:00000000
-
-[HKEY_CURRENT_USER\Control Panel\Accessibility\HighContrast]
-"Flags"="4194"
-
-[HKEY_CURRENT_USER\Control Panel\Accessibility\Keyboard Response]
-"Flags"="2"
-"AutoRepeatRate"="0"
-"AutoRepeatDelay"="0"
-
-[HKEY_CURRENT_USER\Control Panel\Accessibility\MouseKeys]
-"Flags"="130"
-"MaximumSpeed"="39"
-"TimeToMaximumSpeed"="3000"
-
-[HKEY_CURRENT_USER\Control Panel\Accessibility\StickyKeys]
-"Flags"="2"
-
-[HKEY_CURRENT_USER\Control Panel\Accessibility\ToggleKeys]
-"Flags"="34"
-
-[HKEY_CURRENT_USER\Control Panel\Accessibility\SoundSentry]
-"Flags"="0"
-"FSTextEffect"="0"
-"TextEffect"="0"
-"WindowsEffect"="0"
-
-[HKEY_CURRENT_USER\Control Panel\Accessibility\SlateLaunch]
-"ATapp"=""
-"LaunchAT"=dword:00000000
-
-
-
-
-; CLOCK AND REGION
-; disable notify me when the clock changes
-[HKEY_CURRENT_USER\Control Panel\TimeDate]
-"DstNotification"=dword:00000000
-
-
-
-
-; APPEARANCE AND PERSONALIZATION
 ; disable spotlight
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\CloudContent]
 "DisableCloudOptimizedContent"=dword:00000001
@@ -110,217 +149,19 @@ Windows Registry Editor Version 5.00
 [HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel]
 "{2cc5ca98-6485-489a-920e-b3e88a6ccce3}"=dword:00000001
 
-; open file explorer to this pc
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
-"LaunchTo"=dword:00000001
-
-; hide frequent folders in quick access
+; show frequent folders in quick access
 [HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer]
-"ShowFrequent"=dword:00000000
+"ShowFrequent"=-
 
-; show file name extensions
-; show hidden files
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
-"HideFileExt"=dword:00000000
-"Hidden"=dword:00000001
+; enable lock
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Explorer\FlyoutMenuSettings]
+"ShowLockOption"=-
 
-; disable search history
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\SearchSettings]
-"IsDeviceSearchHistoryEnabled"=dword:00000000
+; enable sleep
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\FlyoutMenuSettings]
+"ShowSleepOption"=-
 
-; disable show files from office.com
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer]
-"ShowCloudFilesInQuickAccess"=dword:00000000
-
-; disable display file size information in folder tips
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
-"FolderContentsInfoTip"=dword:00000000
-
-; enable display full path in the title bar
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\CabinetState]
-"FullPath"=dword:00000001
-
-; disable show pop-up description for folder and desktop items
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
-"ShowInfoTip"=dword:00000000
-
-; disable show preview handlers in preview pane
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
-"ShowPreviewHandlers"=dword:00000000
-
-; disable show status bar
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
-"ShowStatusBar"=dword:00000000
-
-; disable show sync provider notifications
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
-"ShowSyncProviderNotifications"=dword:00000000
-
-; disable use sharing wizard
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
-"SharingWizardOn"=dword:00000000
-
-; disable show network
-[HKEY_CURRENT_USER\Software\Classes\CLSID\{F02C1A0D-BE21-4350-88B0-7367FC96EF3C}]
-"System.IsPinnedToNameSpaceTree"=dword:00000000
-
-
-
-
-; HARDWARE AND SOUND
-; disable lock [ optional ]
-; [HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Explorer\FlyoutMenuSettings]
-; "ShowLockOption"=dword:00000000
-
-; disable sleep [ optional ]
-; [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\FlyoutMenuSettings]
-; "ShowSleepOption"=dword:00000000
-
-; sound communications do nothing
-[HKEY_CURRENT_USER\Software\Microsoft\Multimedia\Audio]
-"UserDuckingPreference"=dword:00000003
-
-; disable startup sound
-[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Authentication\LogonUI\BootAnimation]
-"DisableStartupSound"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\EditionOverrides]
-"UserSetting_DisableStartupSound"=dword:00000001
-
-; sound scheme none
-[HKEY_CURRENT_USER\AppEvents\Schemes]
-@=".None"
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\.Default\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\CriticalBatteryAlarm\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\DeviceConnect\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\DeviceDisconnect\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\DeviceFail\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\FaxBeep\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\LowBatteryAlarm\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\MailBeep\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\MessageNudge\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\Notification.Default\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\Notification.IM\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\Notification.Mail\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\Notification.Proximity\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\Notification.Reminder\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\Notification.SMS\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\ProximityConnection\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\SystemAsterisk\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\SystemExclamation\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\SystemHand\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\SystemNotification\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\.Default\WindowsUAC\.Current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\sapisvr\DisNumbersSound\.current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\sapisvr\HubOffSound\.current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\sapisvr\HubOnSound\.current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\sapisvr\HubSleepSound\.current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\sapisvr\MisrecoSound\.current]
-@=""
-
-[HKEY_CURRENT_USER\AppEvents\Schemes\Apps\sapisvr\PanelSound\.current]
-@=""
-
-; disable autoplay
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\AutoplayHandlers]
-"DisableAutoplay"=dword:00000001
-
-; disable enhance pointer precision
-[HKEY_CURRENT_USER\Control Panel\Mouse]
-"MouseSpeed"="0"
-"MouseThreshold1"="0"
-"MouseThreshold2"="0"
-
-; mouse pointers scheme none
-[HKEY_CURRENT_USER\Control Panel\Cursors]
-"AppStarting"=hex(2):00,00
-"Arrow"=hex(2):00,00
-"ContactVisualization"=dword:00000000
-"Crosshair"=hex(2):00,00
-"GestureVisualization"=dword:00000000
-"Hand"=hex(2):00,00
-"Help"=hex(2):00,00
-"IBeam"=hex(2):00,00
-"No"=hex(2):00,00
-"NWPen"=hex(2):00,00
-"Scheme Source"=dword:00000000
-"SizeAll"=hex(2):00,00
-"SizeNESW"=hex(2):00,00
-"SizeNS"=hex(2):00,00
-"SizeNWSE"=hex(2):00,00
-"SizeWE"=hex(2):00,00
-"UpArrow"=hex(2):00,00
-"Wait"=hex(2):00,00
-@=""
-
-; disable device installation settings
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Device Metadata]
-"PreventDeviceMetadataFromNetwork"=dword:00000001
-
-
-
-
-; NETWORK AND INTERNET
-; disable allow other network users to control or disable the shared internet connection
-[HKEY_LOCAL_MACHINE\System\ControlSet001\Control\Network\SharedAccessConnection]
-"EnableControl"=dword:00000000
-
-
-
-
-; SYSTEM AND SECURITY
-; Disable Windows Platform Binary Table (WPBT)
+; disable Windows Platform Binary Table (WPBT)
 [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager]
 "DisableWpbtExecution"=dword:00000001
 
@@ -347,17 +188,15 @@ Windows Registry Editor Version 5.00
 "MaxCacheEntryTtlLimit"=dword:0000fa00
 "MaxNegativeCacheTtl"=dword:00000000
 
-; set appearance options to custom
+; visual effects
 [HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects]
 "VisualFXSetting"=dword:3
 
-; Visual Effects
 [HKEY_CURRENT_USER\Control Panel\Desktop]
 "FontSmoothing"="2"
 "UserPreferencesMask"=hex:90,12,03,80,10,00,00,00
 "DragFullWindows"="1"
 
-; animate windows when minimizing and maximizing
 [HKEY_CURRENT_USER\Control Panel\Desktop\WindowMetrics]
 "MinAnimate"="0"
 
@@ -367,25 +206,25 @@ Windows Registry Editor Version 5.00
 "TaskbarAnimations"=dword:00000000 ; animations in the taskbar
 "ListviewShadow"=dword:00000001
 
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\DWM]
-"EnableAeroPeek"=dword:00000000
-"AlwaysHibernateThumbnails"=dword:00000000
+; enable Multimedia Class Scheduler Service (MMCS)
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\MMCSS]
+"Start"=dword:00000002
 
-; adjust for best performance of programs
+; win32prior
+; Another value said to have good results were A2 value 42 (Short, Fixed , High foreground boost) - https://docs.google.com/spreadsheets/d/1ZWQFycOWdODkUOuYZCxm5lTp08V2m7gjZQSCjywAsl8/edit#gid=762933934
+; But since high foreground, means is prioritizing more the foreground app, it might take from other parts that could be relevant, like input, etc.. I could be wrong.
+; https://docs.google.com/document/d/1ILugrwtHfmisYzI1MdCOhSzBPuLJPi5D7xYJgQ4sxDM/edit#heading=h.emf7opqgiwv8 - 36 has the lowest latency
 [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\PriorityControl]
-"ConvertibleSlateMode"=dword:00000000
-"Win32PrioritySeparation"=dword:00000026
+"Win32PrioritySeparation"=dword:00000024
 
-; disable remote assistance
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Remote Assistance]
-"fAllowToGetHelp"=dword:00000000
 
-; system responsiveness 100%
+; system responsiveness
 [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile]
-"NetworkThrottlingIndex"=dword:ffffffff
+"AlwaysOn"=dword:00000001
+"LazyMode"=dword:00000000
 "SystemResponsiveness"=dword:0000000a
 
-; cpu priority for gaming
+; cpu priorities
 [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Audio]
 "Affinity"=dword:00000000
 "Background Only"="True"
@@ -463,9 +302,9 @@ Windows Registry Editor Version 5.00
 ; enable virtual memory
 [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management]
 "ClearPageFileAtShutdown"=dword:00000000
-"DisablePagingExecutive"=dword:00000001
+"DisablePagingExecutive"=dword:00000001 ; disallow drivers to get paged into virtual memory
 "HotPatchTableSize"=dword:00001000
-"LargeSystemCache"=dword:00000000
+"LargeSystemCache"=dword:00000000 ; use big system memory caching to improve microstuttering
 "NonPagedPoolQuota"=dword:00000000
 "NonPagedPoolSize"=dword:00000000
 "PagedPoolQuota"=dword:00000000
@@ -483,201 +322,35 @@ Windows Registry Editor Version 5.00
 "Overwrite"=dword:00000000
 "LogEvent"=dword:00000000
 "MinidumpsCount"=dword:00000020
-"FeatureSettings"=dword:00000000
-"FeatureSettingsOverrideMask"=dword:00000003
-"FeatureSettingsOverride"=dword:00000003
 "PhysicalAddressExtension"=dword:00000001
 "ExistingPageFiles"=hex(7):5c,00,3f,00,3f,00,5c,00,43,00,3a,00,5c,00,70,00,61,\
   00,67,00,65,00,66,00,69,00,6c,00,65,00,2e,00,73,00,79,00,73,00,00,00,00,00
+"SimulateCommitSavings"=dword:00000000
+"TrackLockedPages"=dword:00000000
+"TrackPtes"=dword:00000000
+"DisablePageCombining"=dword:00000001 ; disable pagecombining
+"IoPageLockLimit"=dword:ffffffff ; disable iopagelock
 
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager]
+"AlpcWakePolicy"=dword:00000001
+"DisablePagingExecutive"=dword:00000001 ; disallow drivers to get paged into virtual memory (duplicate key)
+
+; disable fetch feature that may cause higher disk usage
 [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters]
 "EnablePrefetcher"=dword:00000000
 "EnableBootTrace"=dword:00000000
 "EnableSuperfetch"=dword:00000000
-; "SfTracingState"=dword:00000001
+"SfTracingState"=dword:00000000
 
-
-
-
-; DISABLE WINDOWS SECURITY SETTINGS
-; disable cloud delivered protection
-; [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Defender\Spynet]
-; "SpyNetReporting"=dword:00000000
-
-; disable automatic sample submission
-; [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Defender\Spynet]
-; "SubmitSamplesConsent"=dword:00000000
-
-; disable firewall notifications
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Defender Security Center\Notifications]
-"DisableEnhancedNotifications"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Defender Security Center\Virus and threat protection]
-"NoActionNotificationDisabled"=dword:00000001
-"SummaryNotificationDisabled"=dword:00000001
-"FilesBlockedNotificationDisabled"=dword:00000001
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows Defender Security Center\Account protection]
-"DisableNotifications"=dword:00000001
-"DisableDynamiclockNotifications"=dword:00000001
-"DisableWindowsHelloNotifications"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\System\ControlSet001\Services\SharedAccess\Epoch]
-"Epoch"=dword:000004cf
-
-[HKEY_LOCAL_MACHINE\System\ControlSet001\Services\SharedAccess\Parameters\FirewallPolicy\DomainProfile]
-"DisableNotifications"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\System\ControlSet001\Services\SharedAccess\Parameters\FirewallPolicy\PublicProfile]
-"DisableNotifications"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\System\ControlSet001\Services\SharedAccess\Parameters\FirewallPolicy\StandardProfile]
-"DisableNotifications"=dword:00000001
-
-; exploit protection, leaving control flow guard cfg on for vanguard anticheat
-[HKEY_LOCAL_MACHINE\System\ControlSet001\Control\Session Manager\kernel]
-"MitigationOptions"=hex:22,22,22,00,00,01,00,00,00,00,00,00,00,00,00,00,\
-00,00,00,00,00,00,00,00
-
-; disable core isolation 
-; memory integrity 
-[HKEY_LOCAL_MACHINE\System\ControlSet001\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity]
-"ChangedInBootCycle"=-
-"Enabled"=dword:00000000
-"WasEnabledBy"=-
-
-; disable device guard
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\DeviceGuard]
-"EnableVirtualizationBasedSecurity"=dword:00000000
-"RequirePlatformSecurityFeatures"=-
-"HypervisorEnforcedCodeIntegrity"=-
-"HVCIMATRequired"=dword:00000000
-"LsaCfgFlags"=-
-"ConfigureSystemGuardLaunch"=-
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard]
-"EnableVirtualizationBasedSecurity"=dword:00000000
-"RequirePlatformSecurityFeatures"=-
-"HypervisorEnforcedCodeIntegrity"=-
-"HVCIMATRequired"=dword:00000000
-"LsaCfgFlags"=-
-"ConfigureSystemGuardLaunch"=-
-
-; disable local security authority protection
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa]
-"RunAsPPL"=dword:00000000
-"RunAsPPLBoot"=dword:00000000
-
-; disable microsoft vulnerable driver blocklist
-[HKEY_LOCAL_MACHINE\System\ControlSet001\Control\CI\Config]
-"VulnerableDriverBlocklistEnable"=dword:00000000
-
-; disable Bitlocker
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\BitLocker]
-"PreventDeviceEncryption"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\FVE]
-"DisableExternalDMAUnderLock"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\EnhancedStorageDevices]
-"TCGSecurityActivationDisabled"=dword:00000001
-
-; kernel-mode hardware-enforced stack protection
-[HKEY_LOCAL_MACHINE\System\ControlSet001\Control\DeviceGuard\Scenarios\KernelShadowStacks]
-"ChangedInBootCycle"=-
-"Enabled"=dword:00000000
-"WasEnabledBy"=-
-
-; spectre and meltdown
-[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\Session Manager\Memory Management]
-"FeatureSettingsOverrideMask"=dword:00000003
-"FeatureSettingsOverride"=dword:00000003
-
-; other mitigations
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\WindowsMitigation]
-"UserPreference"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SCMConfig]
-"EnableSvchostMitigationPolicy"=hex(b):00,00,00,00,00,00,00,00
-
-; [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\kernel]
-; "MitigationAuditOptions"=hex:00,00,00,00,00,00,20,22,00,00,00,00,00,00,00,20,00,00,00,00,00,00,00,00
-; "MitigationOptions"=hex:00,22,22,20,22,20,22,22,20,00,00,00,00,20,00,20,00,00,00,00,00,00,00,00
-; "KernelSEHOPEnabled"=dword:00000000
-
-[HKEY_LOCAL_MACHINE\System\ControlSet001\Control\DeviceGuard\Scenarios\KernelShadowStacks]
-"ChangedInBootCycle"=-
-"Enabled"=dword:00000000
-"WasEnabledBy"=-
-
-; disable uac
-; [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System]
-; "EnableLUA"=dword:00000000
-
-; disable smartscreen
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer]
-"SmartScreenEnabled"="Off"
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\System]
-"EnableSmartScreen"=dword:00000000
-"ShellSmartScreenLevel"=-
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\System]
-"EnableSmartScreen"=dword:00000000
-"ShellSmartScreenLevel"=-
-
-; disable smartscreen in edge
-[HKEY_CURRENT_USER\Software\Microsoft\Edge\SmartScreenEnabled]
-"(Default)"="0"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Edge\SmartScreenEnabled]
-@=dword:00000000
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Edge\SmartScreenPuaEnabled]
-@=dword:00000000
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\MicrosoftEdge\PhishingFilter]
-"EnabledV9"=dword:00000000
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\MicrosoftEdge\PhishingFilter]
-"EnabledV9"=dword:00000000
-
-; disable smartscreen for store apps
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\AppHost]
-"EnableWebContentEvaluation"=dword:00000000
-"PreventOverride"=dword:00000000
-
-; disable fth
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\FTH]
+; disable fth (fault tolerant heap)
+[HKEY_LOCAL_MACHINE\Software\Microsoft\FTH]
 "Enabled"=dword:00000000
 
-; hide family options settings
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows Defender Security Center\Family options]
-"UILockdown"=dword:00000001
+; remove fth state key
+[-HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\FTH\State]
 
-; hide account protection settings
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows Defender Security Center\Account protection]
-"UILockdown"=dword:00000001
-
-; hide device security settings (optional)
-; [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows Defender Security Center\Device security]
-; "UILockdown"=dword:00000001
-
-
-
-
-; TROUBLESHOOTING
-; disable automatic maintenance
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\Maintenance]
-"MaintenanceDisabled"=dword:00000001
-
-
-
-
-; SECURITY AND MAINTENANCE
-; disable report problems
+; disable error reporting
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting]
-"Disabled"=dword:00000001
 "DontSendAdditionalData"=dword:00000001
 
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\PCHealth\ErrorReporting]
@@ -686,21 +359,6 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting]
 "Disabled"=dword:00000001
 
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\PCHealth\ErrorReporting]
-"DoReport"=dword:00000000
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\Windows Error Reporting]
-"Disabled"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\PCHealth\ErrorReporting]
-"DoReport"=dword:00000000
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\Windows Error Reporting]
-"Disabled"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\HandwritingErrorReports]
-"PreventHandwritingErrorReports"=dword:00000001
-
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\HandwritingErrorReports]
 "PreventHandwritingErrorReports"=dword:00000001
 
@@ -708,844 +366,45 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Settings]
 "DisableSendGenericDriverNotFoundToWER"=dword:00000001
 
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\DeviceInstall\Settings]
-"DisableSendGenericDriverNotFoundToWER"=dword:00000001
-
-; prevent windows from sending an error report when a device driver requests additional software during installation
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\DeviceInstall\Settings]
-"DisableSendRequestAdditionalSoftwareToWER"=dword:00000001
-
-; Increase System Restore Point Creation Frequency
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore]
-"SystemRestorePointCreationFrequency"=dword:00000000
-
-; Limiting Windows Defender CPU usage
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows Defender\Scan]
-"AvgCPULoadFactor"=dword:00000019
-"ScanAvgCPULoadFactor"=dword:00000019
-
-
-
-
-; --IMMERSIVE CONTROL PANEL--
-
-
-
-
-; WINDOWS UPDATE
-; disable automatic updates
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU]
-"AUOptions"=dword:00000002
-; "NoAutoUpdate"=dword:00000001 ; Breaks 'Receive updates for other Microsoft products'
-; "AutoInstallMinorUpdates"=dword:00000000 ; enable notifications for security updates only (do not auto-download)
-
-; prevent automatic upgrade to windows 11 and defer quality updates for 1 year
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate]
-"TargetReleaseVersion"=dword:00000001
-"TargetReleaseVersionInfo"="22H2"
-"ProductVersion"="Windows 10"
-"DeferFeatureUpdates"=dword:00000001
-"DeferFeatureUpdatesPeriodInDays"=dword:0000016d
-"DeferQualityUpdates"=dword:00000001
-"DeferQualityUpdatesPeriodInDays"=dword:00000007
-
-; block workplace join prompt
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\WorkplaceJoin]
-"BlockAADWorkplaceJoin"=dword:00000001
-
-; turn off driver updates via win update
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\PolicyManager\current\device\Update]
-"ExcludeWUDriversInQualityUpdate"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\PolicyManager\default\Update]
-"ExcludeWUDriversInQualityUpdate"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings]
-"ExcludeWUDriversInQualityUpdate"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate]
-"ExcludeWUDriversInQualityUpdate"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\PolicyManager\default\Update\ExcludeWUDriversInQualityUpdate]
-"value"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Device Metadata]
-"PreventDeviceMetadataFromNetwork"=dword:00000001
-
-; disable driver searching & updates
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\DriverSearching]
-"DontSearchWindowsUpdate"=dword:00000001
-"SearchOrderConfig"=dword:00000000
-
-; disable delivery optimization
-; [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization]
-; "DODownloadMode"=dword:00000000
-
-[HKEY_USERS\S-1-5-20\Software\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Settings]
-"DownloadMode"=dword:00000000
-
-
-
-
-; PRIVACY
-; disable password reveal button
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\CredUI]
-"DisablePasswordReveal"=dword:00000001
-
-; disable show me notification in the settings app
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\SystemSettings\AccountNotifications]
-"EnableAccountNotifications"=dword:00000000
-
-; disable location
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location]
-"Value"="Deny"
-
-; disable allow location override
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\CPSS\Store\UserLocationOverridePrivacySetting]
-"Value"=dword:00000000
-
-; enable camera
-[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\webcam]
-"Value"="Allow"
-
-; enable microphone 
-[Computer\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone]
-"Value"="Allow"
-
-; disable voice activation
-[HKEY_CURRENT_USER\Software\Microsoft\Speech_OneCore\Settings\VoiceActivation\UserPreferenceForAllApps]
-"AgentActivationEnabled"=dword:00000000
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Speech_OneCore\Settings\VoiceActivation\UserPreferenceForAllApps]
-"AgentActivationLastUsed"=dword:00000000
-
-; disable notifications
-[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\userNotificationListener]
-"Value"="Deny"
-
-; disable action center [ optional ]
-; [HKEY_CURRENT_USER\SOFTWARE\Policies\Microsoft\Windows\Explorer]
-; "DisableNotificationCenter"=dword:00000001
-
-; [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Explorer]
-; "DisableNotificationCenter"=dword:00000001
-
-; disable account info
-[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\userAccountInformation]
-"Value"="Deny"
-
-; disable contacts
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\contacts]
-"Value"="Deny"
-
-; disable calendar
-[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\appointments]
-"Value"="Deny"
-
-; disable phone calls
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\phoneCall]
-"Value"="Deny"
-
-; disable call history
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\phoneCallHistory]
-"Value"="Deny"
-
-; disable email
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\email]
-"Value"="Deny"
-
-; disable tasks
-[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\userDataTasks]
-"Value"="Deny"
-
-; disable messaging
-[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\chat]
-"Value"="Deny"
-
-; disable radios
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\radios]
-"Value"="Deny"
-
-; disable other devices 
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\bluetoothSync]
-"Value"="Deny"
-
-; app diagnostics 
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\appDiagnostics]
-"Value"="Deny"
-
-; disable documents
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\documentsLibrary]
-"Value"="Deny"
-
-; disable downloads folder 
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\downloadsFolder]
-"Value"="Deny"
-
-; disable music library
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\musicLibrary]
-"Value"="Deny"
-
-; disable pictures
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\picturesLibrary]
-"Value"="Deny"
-
-; disable videos
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\videosLibrary]
-"Value"="Deny"
-
-; disable file system
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\broadFileSystemAccess]
-"Value"="Deny"
-
-; disable let websites show me locally relevant content by accessing my language list 
-[HKEY_CURRENT_USER\Control Panel\International\User Profile]
-"HttpAcceptLanguageOptOut"=dword:00000001
-
-; disable let windows improve start and search results by tracking app launches  
-[HKEY_CURRENT_USER\Software\Policies\Microsoft\Windows\EdgeUI]
-"DisableMFUTracking"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\EdgeUI]
-"DisableMFUTracking"=dword:00000001
-
-; disable personal inking and typing dictionary
-[HKEY_CURRENT_USER\Software\Microsoft\InputPersonalization]
-"RestrictImplicitInkCollection"=dword:00000001
-"RestrictImplicitTextCollection"=dword:00000001
-
-[HKEY_CURRENT_USER\Software\Microsoft\InputPersonalization\TrainedDataStore]
-"HarvestContacts"=dword:00000000
-
-[HKEY_CURRENT_USER\Software\Microsoft\Personalization\Settings]
-"AcceptedPrivacyPolicy"=dword:00000000
-
-; disable sending required data
-[HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\DataCollection]
-"AllowTelemetry"=dword:00000000
-
-; feedback frequency never
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Siuf\Rules]
-"NumberOfSIUFInPeriod"=dword:00000000
-"PeriodInNanoSeconds"=-
-
-
-
-
-; SEARCH
-; disable search highlights
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\SearchSettings]
-"IsDynamicSearchBoxEnabled"=dword:00000000
-
-; disable safe search
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\SearchSettings]
-"SafeSearchMode"=dword:00000000
-
-; disable cloud content search for work or school account
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\SearchSettings]
-"IsAADCloudSearchEnabled"=dword:00000000
-
-; disable cloud content search for microsoft account
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\SearchSettings]
-"IsMSACloudSearchEnabled"=dword:00000000
-
-
-
-
-; EASE OF ACCESS
-; disable magnifier settings 
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\ScreenMagnifier]
-"FollowCaret"=dword:00000000
-"FollowNarrator"=dword:00000000
-"FollowMouse"=dword:00000000
-"FollowFocus"=dword:00000000
-
-; disable narrator settings
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Narrator]
-"IntonationPause"=dword:00000000
-"ReadHints"=dword:00000000
-"ErrorNotificationType"=dword:00000000
-"EchoChars"=dword:00000000
-"EchoWords"=dword:00000000
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Narrator\NarratorHome]
-"MinimizeType"=dword:00000000
-"AutoStart"=dword:00000000
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Narrator\NoRoam]
-"EchoToggleKeys"=dword:00000000
-
-; disable use the print screen key to open screeen capture
-[HKEY_CURRENT_USER\Control Panel\Keyboard]
-"PrintScreenKeyForSnippingEnabled"=dword:00000000
-
-
-
-
-; GAMING
-; disable game bar
-[HKEY_CURRENT_USER\System\GameConfigStore]
-"GameDVR_Enabled"=dword:00000000
-
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\GameDVR]
-"AppCaptureEnabled"=dword:00000000
-
-; disable enable open xbox game bar using game controller
+; disable game mode
 [HKEY_CURRENT_USER\Software\Microsoft\GameBar]
-"UseNexusForGameBarEnabled"=dword:00000000
-
-; enable game mode
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\GameBar]
-"AllowAutoGameMode"=dword:00000001
-"AutoGameModeEnabled"=dword:00000001
-
-; other settings
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\GameDVR]
-"AudioEncodingBitrate"=dword:0001f400
-"AudioCaptureEnabled"=dword:00000000
-"CustomVideoEncodingBitrate"=dword:003d0900
-"CustomVideoEncodingHeight"=dword:000002d0
-"CustomVideoEncodingWidth"=dword:00000500
-"HistoricalBufferLength"=dword:0000001e
-"HistoricalBufferLengthUnit"=dword:00000001
-"HistoricalCaptureEnabled"=dword:00000000
-"HistoricalCaptureOnBatteryAllowed"=dword:00000001
-"HistoricalCaptureOnWirelessDisplayAllowed"=dword:00000001
-"MaximumRecordLength"=hex(b):00,D0,88,C3,10,00,00,00
-"VideoEncodingBitrateMode"=dword:00000002
-"VideoEncodingResolutionMode"=dword:00000002
-"VideoEncodingFrameRateMode"=dword:00000000
-"EchoCancellationEnabled"=dword:00000001
-"CursorCaptureEnabled"=dword:00000000
-"VKToggleGameBar"=dword:00000000
-"VKMToggleGameBar"=dword:00000000
-"VKSaveHistoricalVideo"=dword:00000000
-"VKMSaveHistoricalVideo"=dword:00000000
-"VKToggleRecording"=dword:00000000
-"VKMToggleRecording"=dword:00000000
-"VKTakeScreenshot"=dword:00000000
-"VKMTakeScreenshot"=dword:00000000
-"VKToggleRecordingIndicator"=dword:00000000
-"VKMToggleRecordingIndicator"=dword:00000000
-"VKToggleMicrophoneCapture"=dword:00000000
-"VKMToggleMicrophoneCapture"=dword:00000000
-"VKToggleCameraCapture"=dword:00000000
-"VKMToggleCameraCapture"=dword:00000000
-"VKToggleBroadcast"=dword:00000000
-"VKMToggleBroadcast"=dword:00000000
-"MicrophoneCaptureEnabled"=dword:00000000
-"SystemAudioGain"=hex(b):10,27,00,00,00,00,00,00
-"MicrophoneGain"=hex(b):10,27,00,00,00,00,00,00
-
-
-
-
-; TIME & LANGUAGE 
-; disable show the voice typing mic button
-[HKEY_CURRENT_USER\Software\Microsoft\input\Settings]
-"IsVoiceTypingKeyEnabled"=dword:00000000
-
-; disable capitalize the first letter of each sentence
-; disable play key sounds as i type
-; disable add a period after i double-tap the spacebar
-[HKEY_CURRENT_USER\Software\Microsoft\TabletTip\1.7]
-"EnableAutoShiftEngage"=dword:00000000
-"EnableKeyAudioFeedback"=dword:00000000
-"EnableDoubleTapSpace"=dword:00000000
-
-; disable typing insights
-[HKEY_CURRENT_USER\Software\Microsoft\input\Settings]
-"InsightsEnabled"=dword:00000000
-
-
-
-
-; ACCOUNTS
-; disable use my sign in info after restart
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System]
-"DisableAutomaticRestartSignOn"=dword:00000001
-
-
-
-
-; APPS
-; disable automatically update maps
-[HKEY_LOCAL_MACHINE\SYSTEM\Maps]
-"AutoUpdateEnabled"=dword:00000000
-
-; disable archive apps 
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Appx]
-"AllowAutomaticAppArchiving"=dword:00000000
+"AllowAutoGameMode"=-
+"AutoGameModeEnabled"=-
 
 ; turn off resume
 [HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\CrossDeviceResume\Configuration]
 "IsResumeAllowed"=dword:00000000
 
-; [HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\CrossDeviceResume]  
-; "DisableCrossDeviceResume"=dword:00000001  
+; disable CrossDeviceResume
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\CrossDeviceResume]  
+"DisableCrossDeviceResume"=dword:00000001  
 
 ; disable sync apps
 [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\PolicyManager\default\Experience\AllowSyncMySettings]
 "value"=dword:00000000
 
+; enale transparency
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize]
+"EnableTransparency"=dword:00000001
 
-
-
-; PERSONALIZATION
-; don't show all taskbar icons
+; hide all taskbar icons
 [HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer]
 "EnableAutoTray"=-
 
-; solid color personalize your background
-[HKEY_CURRENT_USER\Control Panel\Desktop]
-"Wallpaper"=""
-
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers]
-"BackgroundType"=dword:00000001
-
-; dark theme 
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize]
-"AppsUseLightTheme"=dword:00000000
-"SystemUsesLightTheme"=dword:00000000
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize]
-"AppsUseLightTheme"=dword:00000000
-
-; [HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Accent]
-; "StartColorMenu"=dword:ff3d3f41
-; "AccentColorMenu"=dword:ff484a4c
-; "AccentPalette"=hex(3):DF,DE,DC,00,A6,A5,A1,00,68,65,62,00,4C,4A,48,00,41,\
-; 3F,3D,00,27,25,24,00,10,0D,0D,00,10,7C,10,00
-
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\DWM]
-"EnableWindowColorization"=dword:00000001
-"AccentColor"=dword:ff484a4c
-"ColorizationColor"=dword:c44c4a48
-"ColorizationAfterglow"=dword:c44c4a48
-
-; disable transparency
-; [HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize]
-; "EnableTransparency"=dword:00000000
-
-; always hide most used list in start menu
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Explorer]
-"ShowOrHideMostUsedApps"=dword:00000002
-
-[HKEY_CURRENT_USER\SOFTWARE\Policies\Microsoft\Windows\Explorer]
-"ShowOrHideMostUsedApps"=-
-
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer]
-"NoStartMenuMFUprogramsList"=-
-"NoInstrumentation"=-
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer]
-"NoStartMenuMFUprogramsList"=-
-"NoInstrumentation"=-
-
-; start menu hide recommended w11
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\PolicyManager\current\device\Start]
-"HideRecommendedSection"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\PolicyManager\current\device\Education]
-"IsEducationEnvironment"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Explorer]
-"HideRecommendedSection"=dword:00000001
-
-; more pins personalization start
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
-"Start_Layout"=dword:00000001
-
-; disable show recently added apps
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Explorer]
-"HideRecentlyAddedApps"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer]
-"HideRecentlyAddedApps"=dword:00000001
-
-; disable show account-related notifications
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
-"Start_AccountNotifications"=dword:00000000
-
-; disable show recently opened items in start, jump lists and file explorer
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
-"Start_TrackDocs"=dword:00000000 
-"Start_ShowRecentDocs"=dword:00000000
-
-; left taskbar alignment
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
-"TaskbarAl"=dword:00000000
-
-; remove chat from taskbar
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
-"TaskbarMn"=dword:00000000
-
-; remove task view from taskbar
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
-"ShowTaskViewButton"=dword:00000000
-
-; remove search from taskbar
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Search]
-"SearchboxTaskbarMode"=dword:00000000
-
-; remove windows widgets from taskbar
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Dsh] 
-"AllowNewsAndInterests"=dword:00000000
-
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Feeds]
-"ShellFeedsTaskbarOpenOnHover"=dword:00000000
-
-; remove copilot from taskbar
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
-"ShowCopilotButton"=dword:00000000
-
-; remove meet now
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer]
-"HideSCAMeetNow"=dword:00000001
-
-; remove news and interests
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Windows Feeds]
-"EnableFeeds"=dword:00000000
-
-; show all taskbar icons [ optional ]
-; [HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer]
-; "EnableAutoTray"=dword:00000000
-
-; remove security taskbar icon
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run]
-"SecurityHealth"=hex(3):07,00,00,00,05,DB,8A,69,8A,49,D9,01
-
-; disable use dynamic lighting on my devices
-[HKEY_CURRENT_USER\Software\Microsoft\Lighting]
-"AmbientLightingEnabled"=dword:00000000
-
-; disable compatible apps in the forground always control lighting 
-[HKEY_CURRENT_USER\Software\Microsoft\Lighting]
-"ControlledByForegroundApp"=dword:00000000
-
-; disable match my windows accent color 
-[HKEY_CURRENT_USER\Software\Microsoft\Lighting]
-"UseSystemAccentColor"=dword:00000000
-
-; disable show key background
-[HKEY_CURRENT_USER\Software\Microsoft\TabletTip\1.7]
-"IsKeyBackgroundEnabled"=dword:00000000
-
-; disable show recommendations for tips shortcuts new apps and more
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
-"Start_IrisRecommendations"=dword:00000000
-
-; disable share any window from my taskbar
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
-"TaskbarSn"=dword:00000000
-
 ; disable online tips
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Policies\Explorer]
-"AllowOnlineTips"=dword:00000000
-
 [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer]
 "AllowOnlineTips"=dword:00000000
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\EdgeUI]
-"DisableHelpSticker"=dword:00000001
 
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Settings]
 "DisableBalloonTips"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\DeviceInstall\Settings]
-"DisableBalloonTips"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\CloudContent]
-"DisableSoftLanding"=dword:00000001
-
-
-
-
-; DEVICES
-; disable usb issues notify
-[HKEY_CURRENT_USER\Software\Microsoft\Shell\USB]
-"NotifyOnUsbErrors"=dword:00000000
-
-; disable let windows manage my default printer
-[HKEY_CURRENT_USER\Software\Microsoft\Windows NT\CurrentVersion\Windows]
-"LegacyDefaultPrinterMode"=dword:00000001
-
-; disable write with your fingertip
-[HKEY_CURRENT_USER\Software\Microsoft\TabletTip\EmbeddedInkControl]
-"EnableInkingWithTouch"=dword:00000000
-
-
-
-
-; SYSTEM
-; 100% dpi scaling
-[HKEY_CURRENT_USER\Control Panel\Desktop]
-"LogPixels"=dword:00000060
-"Win8DpiScaling"=dword:00000001
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\DWM]
-"UseDpiScaling"=dword:00000000
-
-; disable fix scaling for apps
-[HKEY_CURRENT_USER\Control Panel\Desktop]
-"EnablePerProcessSystemDPI"=dword:00000000
-
-; turn on hardware accelerated gpu scheduling
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers]
-"HwSchMode"=dword:00000002
-
-; disable variable refresh rate & enable optimizations for windowed games
-[HKEY_CURRENT_USER\Software\Microsoft\DirectX\UserGpuPreferences]
-"DirectXUserGlobalSettings"="SwapEffectUpgradeEnable=1;VRROptimizeEnable=0;"
-
-; disable notifications
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\PushNotifications]
-"ToastEnabled"=dword:00000000
-
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.SystemToast.SecurityAndMaintenance]
-"Enabled"=dword:00000000
-
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel]
-"Enabled"=dword:00000000
-
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.SystemToast.CapabilityAccess]
-"Enabled"=dword:00000000
-
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.SystemToast.StartupApp]
-"Enabled"=dword:00000000
-
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo]
-"Enabled"=dword:00000000
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo]
-"DisabledByGroupPolicy"=dword:00000001
-
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager]
-"RotatingLockScreenEnabled"=dword:00000000
-"RotatingLockScreenOverlayEnabled"=dword:00000000
-"SubscribedContent-338389Enabled"=dword:00000000
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\UserProfileEngagement]
-"ScoobeSystemSettingEnabled"=dword:00000000
-
-; disable suggested actions
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\SmartActionPlatform\SmartClipboard]
-"Disabled"=dword:00000001
-
-; disable focus assist
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\CloudStore\Store\Cache\DefaultAccount\??windows.data.notifications.quiethourssettings\Current]
-"Data"=hex(3):02,00,00,00,B4,67,2B,68,F0,0B,D8,01,00,00,00,00,43,42,01,00,\
-C2,0A,01,D2,14,28,4D,00,69,00,63,00,72,00,6F,00,73,00,6F,00,66,00,74,00,2E,\
-00,51,00,75,00,69,00,65,00,74,00,48,00,6F,00,75,00,72,00,73,00,50,00,72,00,\
-6F,00,66,00,69,00,6C,00,65,00,2E,00,55,00,6E,00,72,00,65,00,73,00,74,00,72,\
-00,69,00,63,00,74,00,65,00,64,00,CA,28,D0,14,02,00,00
-
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\CloudStore\Store\Cache\DefaultAccount\?quietmomentfullscreen?windows.data.notifications.quietmoment\Current]
-"Data"=hex(3):02,00,00,00,97,1D,2D,68,F0,0B,D8,01,00,00,00,00,43,42,01,00,\
-C2,0A,01,D2,1E,26,4D,00,69,00,63,00,72,00,6F,00,73,00,6F,00,66,00,74,00,2E,\
-00,51,00,75,00,69,00,65,00,74,00,48,00,6F,00,75,00,72,00,73,00,50,00,72,00,\
-6F,00,66,00,69,00,6C,00,65,00,2E,00,41,00,6C,00,61,00,72,00,6D,00,73,00,4F,\
-00,6E,00,6C,00,79,00,C2,28,01,CA,50,00,00
-
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\CloudStore\Store\Cache\DefaultAccount\?quietmomentgame?windows.data.notifications.quietmoment\Current]
-"Data"=hex(3):02,00,00,00,6C,39,2D,68,F0,0B,D8,01,00,00,00,00,43,42,01,00,\
-C2,0A,01,D2,1E,28,4D,00,69,00,63,00,72,00,6F,00,73,00,6F,00,66,00,74,00,2E,\
-00,51,00,75,00,69,00,65,00,74,00,48,00,6F,00,75,00,72,00,73,00,50,00,72,00,\
-6F,00,66,00,69,00,6C,00,65,00,2E,00,50,00,72,00,69,00,6F,00,72,00,69,00,74,\
-00,79,00,4F,00,6E,00,6C,00,79,00,C2,28,01,CA,50,00,00
-
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\CloudStore\Store\Cache\DefaultAccount\?quietmomentpostoobe?windows.data.notifications.quietmoment\Current]
-"Data"=hex(3):02,00,00,00,06,54,2D,68,F0,0B,D8,01,00,00,00,00,43,42,01,00,\
-C2,0A,01,D2,1E,28,4D,00,69,00,63,00,72,00,6F,00,73,00,6F,00,66,00,74,00,2E,\
-00,51,00,75,00,69,00,65,00,74,00,48,00,6F,00,75,00,72,00,73,00,50,00,72,00,\
-6F,00,66,00,69,00,6C,00,65,00,2E,00,50,00,72,00,69,00,6F,00,72,00,69,00,74,\
-00,79,00,4F,00,6E,00,6C,00,79,00,C2,28,01,CA,50,00,00
-
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\CloudStore\Store\Cache\DefaultAccount\?quietmomentpresentation?windows.data.notifications.quietmoment\Current]
-"Data"=hex(3):02,00,00,00,83,6E,2D,68,F0,0B,D8,01,00,00,00,00,43,42,01,00,\
-C2,0A,01,D2,1E,26,4D,00,69,00,63,00,72,00,6F,00,73,00,6F,00,66,00,74,00,2E,\
-00,51,00,75,00,69,00,65,00,74,00,48,00,6F,00,75,00,72,00,73,00,50,00,72,00,\
-6F,00,66,00,69,00,6C,00,65,00,2E,00,41,00,6C,00,61,00,72,00,6D,00,73,00,4F,\
-00,6E,00,6C,00,79,00,C2,28,01,CA,50,00,00
-
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\CloudStore\Store\Cache\DefaultAccount\?quietmomentscheduled?windows.data.notifications.quietmoment\Current]
-"Data"=hex(3):02,00,00,00,2E,8A,2D,68,F0,0B,D8,01,00,00,00,00,43,42,01,00,\
-C2,0A,01,D2,1E,28,4D,00,69,00,63,00,72,00,6F,00,73,00,6F,00,66,00,74,00,2E,\
-00,51,00,75,00,69,00,65,00,74,00,48,00,6F,00,75,00,72,00,73,00,50,00,72,00,\
-6F,00,66,00,69,00,6C,00,65,00,2E,00,50,00,72,00,69,00,6F,00,72,00,69,00,74,\
-00,79,00,4F,00,6E,00,6C,00,79,00,C2,28,01,D1,32,80,E0,AA,8A,99,30,D1,3C,80,\
-E0,F6,C5,D5,0E,CA,50,00,00
-
-; battery options optimize for video quality
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\VideoSettings]
-"VideoQualityOnBattery"=dword:00000001
-
-; disable storage sense
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\StorageSense]
-"AllowStorageSenseGlobal"=dword:00000000
-
-; disable snap window settings
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
-"SnapAssist"=dword:00000000
-"DITest"=dword:00000000
-"EnableSnapBar"=dword:00000000
-"EnableTaskGroups"=dword:00000000
-"EnableSnapAssistFlyout"=dword:00000000
-"SnapFill"=dword:00000000
-"JointResize"=dword:00000000
-
-; alt tab open windows only
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
-"MultiTaskingAltTabFilter"=dword:00000003
-
-; disable share across devices
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\CDP]
-"RomeSdkChannelUserAuthzPolicy"=dword:00000000
-"CdpSessionUserAuthzPolicy"=dword:00000000
 
 ; disable Clipboard
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\System]
 "AllowCrossDeviceClipboard"=dword:00000000
 
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\System]
-"AllowCrossDeviceClipboard"=dword:00000000
-
-; disable Clipboard history
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\System]
-"AllowClipboardHistory"=dword:00000000
-
+; disable clipboard history
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\System]
 "AllowClipboardHistory"=dword:00000000
-
-
-
-
-; --OTHER--
-
-
-
-
-; STORE
-; disable update apps automatically
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\WindowsStore]
-"AutoDownload"=dword:00000002
-
-
-
-
-; EDGE
-
-
-
-
-
-; CHROME
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Google\Chrome]
-"StartupBoostEnabled"=dword:00000000
-"HardwareAccelerationModeEnabled"=dword:00000000
-"BackgroundModeEnabled"=dword:00000000
-"HighEfficiencyModeEnabled"=dword:00000001
-"DeviceMetricsReportingEnabled"=dword:00000000
-"MetricsReportingEnabled"=dword:00000000
-"ChromeCleanupReportingEnabled"=dword:00000000
-"UserFeedbackAllowed"=dword:00000000
-"WebRtcEventLogCollectionAllowed"=dword:00000000
-"NetworkPredictionOptions"=dword:00000002 ; Disable DNS prefetching
-"ChromeCleanupEnabled"=dword:00000000
-"DefaultGeolocationSetting"=dword:00000002
-"DefaultNotificationsSetting"=dword:00000002
-"DefaultLocalFontsSetting"=dword:00000002
-"DefaultSensorsSetting"=dword:00000002
-"DefaultSerialGuardSetting"=dword:00000002
-"CloudReportingEnabled"=dword:00000000
-"DriveDisabled"=dword:00000001
-"PasswordManagerEnabled"=dword:00000000
-"PasswordSharingEnabled"=dword:00000000
-"PasswordLeakDetectionEnabled"=dword:00000000
-"QuickAnswersEnabled"=dword:00000000
-"SafeBrowsingExtendedReportingEnabled"=dword:00000000
-"SafeBrowsingSurveysEnabled"=dword:00000000
-"SafeBrowsingDeepScanningEnabled"=dword:00000000
-"DeviceActivityHeartbeatEnabled"=dword:00000000
-"HeartbeatEnabled"=dword:00000000
-"LogUploadEnabled"=dword:00000000
-"ReportAppInventory"=""
-"ReportDeviceActivityTimes"=dword:00000000
-"ReportDeviceAppInfo"=dword:00000000
-"ReportDeviceSystemInfo"=dword:00000000
-"ReportDeviceUsers"=dword:00000000
-"ReportWebsiteTelemetry"=""
-"AlternateErrorPagesEnabled"=dword:00000000
-"AutofillCreditCardEnabled"=dword:00000000
-"BrowserGuestModeEnabled"=dword:00000000
-"BrowserSignin"=dword:00000000
-"BuiltInDnsClientEnabled"=dword:00000000
-"DefaultBrowserSettingEnabled"=dword:00000000
-"ParcelTrackingEnabled"=dword:00000000
-"RelatedWebsiteSetsEnabled"=dword:00000000
-"ShoppingListEnabled"=dword:00000000
-"SyncDisabled"=dword:00000001
-"ExtensionManifestV2Availability"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\GoogleChromeElevationService]
-"Start"=dword:00000004
-
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\gupdate]
-"Start"=dword:00000004
-
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\gupdatem]
-"Start"=dword:00000004
-
-
-
-
-;FIREFOX
-; Disable Firefox Telemetry
-[HKEY_LOCAL_MACHINE\Software\Policies\Mozilla\Firefox]
-"DisableTelemetry"=dword:00000001
-"DisableDefaultBrowserAgent"=dword:00000001
-
-
-
-
-; NVIDIA
-; disable nvidia tray icon
-[HKEY_CURRENT_USER\Software\NVIDIA Corporation\NvTray]
-"StartOnLogin"=dword:00000000
-
-
-
-
-; --CAN'T DO NATIVELY--
-
-
-
-
-; UWP APPS
-; disable background apps
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy]
-"LetAppsRunInBackground"=dword:00000002
-
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications]
-"GlobalUserDisabled"=dword:00000001
-
-; disable windows input experience preload
-[HKEY_CURRENT_USER\Software\Microsoft\input]
-"IsInputAppPreloadEnabled"=dword:00000000
-
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Dsh]
-"IsPrelaunchEnabled"=dword:00000000
-
-; disable web search in start menu 
-[HKEY_CURRENT_USER\Software\Policies\Microsoft\Windows\Explorer]
-"DisableSearchBoxSuggestions"=dword:00000001
-
-; disable copilot
-[HKEY_CURRENT_USER\Software\Policies\Microsoft\Windows\WindowsCopilot]
-"TurnOffWindowsCopilot"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot]
-"TurnOffWindowsCopilot"=dword:00000001
 
 ; disable Cortana
 [HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\Windows Search]
@@ -1557,23 +416,12 @@ E0,F6,C5,D5,0E,CA,50,00,00
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Windows Search]
 "AllowCortanaAboveLock"=dword:00000000
 
-; disable widgets
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\PolicyManager\default\NewsAndInterests\AllowNewsAndInterests]
-"value"=dword:00000000
-
 ; disable ink workspace
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\WindowsInkWorkspace]
 "AllowWindowsInkWorkspace"=dword:00000000
 
-; disable telemetry
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\DataCollection]
-"AllowTelemetry"=dword:00000000
-
 [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\ScheduledDiagnostics]
 "EnabledExecution"=dword:00000000
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\DataCollection]
-"LimitDiagnosticLogCollection"=dword:00000001
 
 [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Privacy]
 "TailoredExperiencesWithDiagnosticDataEnabled"=dword:00000000
@@ -1584,169 +432,15 @@ E0,F6,C5,D5,0E,CA,50,00,00
 ; disable activity history
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\System]
 "EnableActivityFeed"=dword:00000000
-"PublishUserActivities"=dword:00000000
 "UploadUserActivities"=dword:00000000
 
-; disbale Location [ optional ]
-; [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors]
-; "DisableLocation"=dword:00000001
-
-; [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors]
-; "DisableLocationScripting"=dword:00000001
-; "DisableWindowsLocationProvider"=dword:00000001
-
-; [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\PolicyManager\current\device\System]
-; "AllowExperimentation"=dword:00000000
-
-; [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Sensor\Overrides\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}]
-; "SensorPermissionState"=dword:00000000
-
-; [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\lfsvc\Service\Configuration]
-; "Status"=dword:00000000
-
-; Disable NCSI Active Probing
+; disable NCSI active probing
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator]
 "NoActiveProbe"=dword:00000001
 
-; Disable Network Telemetry
-[HKEY_LOCAL_MACHINE\Software\Microsoft\PolicyManager\default\WiFi\AllowWiFiHotSpotReporting]
-"Value"=dword:00000000
-
-[HKEY_LOCAL_MACHINE\Software\Microsoft\PolicyManager\default\WiFi\AllowAutoConnectToWiFiSenseHotspots]
-"Value"=dword:00000000
-
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Remote Assistance]
-"fAllowToGetHelp"=dword:00000000
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config]
-"DODownloadMode"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization]
-"DODownloadMode"=dword:00000000
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator]
-"NoActiveProbe"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\NlaSvc\Parameters\Internet]
-"EnableActiveProbing"=dword:00000000
-"ActiveWebProbeHost"=""
-"ActiveWebProbeHostV6"=""
-"ActiveWebProbePath"=""
-"ActiveWebProbePathV6"=""
-"ActiveWebProbeContent"=""
-"ActiveWebProbeContentV6"=""
-"ActiveDnsProbeContent"=""
-"ActiveDnsProbeContentV6"=""
-"ActiveDnsProbeHost"=""
-"ActiveDnsProbeHostV6"=""
-
-
-
-
-; NVIDIA
-; enable old nvidia legacy sharpening
-; old location
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm\FTS]
-"EnableGR535"=dword:00000000
-
-; new location
-[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\nvlddmkm\Parameters\FTS]
-"EnableGR535"=dword:00000000
-
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm\Parameters\FTS]
-"EnableGR535"=dword:00000000
-
-
-
-
-; POWER
-; unpark cpu cores 
-[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\0cc5b647-c1df-4637-891a-dec35c318583]
-"ValueMax"=dword:00000000
-
-; disable power throttling
-; [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling]
-; "PowerThrottlingOff"=dword:00000001
-
-; disable hibernate
-; [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power]
-; "HibernateEnabled"=dword:00000000
-; "HibernateEnabledDefault"=dword:00000000
-
-; disable fast boot
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Power]
-"HiberbootEnabled"=dword:00000000
-
-; add maximum processor frequency
-; [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\75b0ae3f-bce0-45a7-8c89-c9611c25e100]
-; "Attributes"=dword:00000002
-
-; disable energy estimation & power saving
-; [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power]
-; "EnergyEstimationEnabled"=dword:00000000
-; "EnergySaverPolicy"=dword:00000001
-
-; disable connected standby
-; [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power]
-; "CsEnabled"=dword:00000000
-
-; disable away mode
-; [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Power]
-; "AwayModeEnabled"=dword:00000000
-
-
-
-
-; DISABLE ADVERTISING & PROMOTIONAL
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager]
-"ContentDeliveryAllowed"=dword:00000000
-"FeatureManagementEnabled"=dword:00000000
-"OemPreInstalledAppsEnabled"=dword:00000000
-"PreInstalledAppsEnabled"=dword:00000000
-"PreInstalledAppsEverEnabled"=dword:00000000
-"RotatingLockScreenEnabled"=dword:00000000
-"RotatingLockScreenOverlayEnabled"=dword:00000000
-"SilentInstalledAppsEnabled"=dword:00000000
-"SlideshowEnabled"=dword:00000000
-"SoftLandingEnabled"=dword:00000000
-"SubscribedContent-310093Enabled"=dword:00000000
-"SubscribedContent-314563Enabled"=dword:00000000
-"SubscribedContent-338388Enabled"=dword:00000000
-"SubscribedContent-338389Enabled"=dword:00000000
-"SubscribedContent-338389Enabled"=dword:00000000
-"SubscribedContent-338393Enabled"=dword:00000000
-"SubscribedContent-338393Enabled"=dword:00000000
-"SubscribedContent-353694Enabled"=dword:00000000
-"SubscribedContent-353694Enabled"=dword:00000000
-"SubscribedContent-353696Enabled"=dword:00000000
-"SubscribedContent-353696Enabled"=dword:00000000
-"SubscribedContent-353698Enabled"=dword:00000000
-"SubscribedContentEnabled"=dword:00000000
-"SystemPaneSuggestionsEnabled"=dword:00000000
-
-
-
-
-; OTHER
-; remove 3d objects
-[-HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}]
-
-[-HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}]
-
-; remove quick access
-; [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer]
-; "HubMode"=dword:00000001
-
-; remove home
-[-HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\{f874310e-b6b7-47dc-bc84-b9e6b38f5903}]
-
-; remove gallery
-[HKEY_CURRENT_USER\Software\Classes\CLSID\{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}]
-"System.IsPinnedToNameSpaceTree"=dword:00000000
-
-; restore the classic context menu
-[HKEY_CURRENT_USER\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32]
-@=""
+; restore quick access
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer]
+"HubMode"=-
 
 ; add "Take ownership" context menu to files and folders
 [HKEY_CLASSES_ROOT\*\shell\TakeOwnership]
@@ -1770,42 +464,9 @@ E0,F6,C5,D5,0E,CA,50,00,00
 @="powershell -windowstyle hidden -command \"Start-Process cmd -ArgumentList '/c takeown /f \\\"%1\\\" /r /d y && icacls \\\"%1\\\" /grant *S-1-3-4:F /t /c /l /q & pause' -Verb runAs\""
 "IsolatedCommand"="powershell -windowstyle hidden -command \"Start-Process cmd -ArgumentList '/c takeown /f \\\"%1\\\" /r /d y && icacls \\\"%1\\\" /grant *S-1-3-4:F /t /c /l /q & pause' -Verb runAs\""
 
-; disable menu show delay
-[HKEY_CURRENT_USER\Control Panel\Desktop]
-"MenuShowDelay"="0"
-
-; mouse fix (no accel with epp on)
-[HKEY_CURRENT_USER\Control Panel\Mouse]
-"MouseSensitivity"="10"
-"SmoothMouseXCurve"=hex:\
-	00,00,00,00,00,00,00,00,\
-	C0,CC,0C,00,00,00,00,00,\
-	80,99,19,00,00,00,00,00,\
-	40,66,26,00,00,00,00,00,\
-	00,33,33,00,00,00,00,00
-"SmoothMouseYCurve"=hex:\
-	00,00,00,00,00,00,00,00,\
-	00,00,38,00,00,00,00,00,\
-	00,00,70,00,00,00,00,00,\
-	00,00,A8,00,00,00,00,00,\
-	00,00,E0,00,00,00,00,00
-
-[HKEY_USERS\.DEFAULT\Control Panel\Mouse]
-"MouseSpeed"="0"
-"MouseThreshold1"="0"
-"MouseThreshold2"="0"
-
-; enable endtask menu taskbar w11
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings]
-"TaskbarEndTask"=dword:00000001
-
 ; enable win32 long paths
 [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem]
 "LongPathsEnabled"=dword:00000001
-
-; remove 'Open in Windows Terminal' in win 11
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked]
-"{9F156763-7844-4DC4-B2B1-901F640F5155}"=""
 
 ; remove share context menu
 [HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked]
@@ -1818,11 +479,7 @@ E0,F6,C5,D5,0E,CA,50,00,00
 [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\WindowsSelfHost\UI\Visibility]
 "HideInsiderPage"=dword:00000001
 
-; remove shortcut arrow overlay icon 
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Icons]
-"29"="C:\\Windows\\blanc.ico"
-
-; Clear icon cache
+; clear icon cache
 [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
 "Start_ShowRecentDocs"=dword:00000001
 "Start_TrackDocs"=dword:00000001
@@ -1848,26 +505,18 @@ E0,F6,C5,D5,0E,CA,50,00,00
 [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer]
 "ShowDriveLettersFirst"=dword:00000004
 
-; enable network drives over uac [ optional ]
-; [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System]
-; "EnableLinkedConnections"=dword:00000001
-; "LocalAccountTokenFilterPolicy"=dword:00000001
-; "EnableVirtualization"=dword:00000000
+; Enable Compact Mode (File Explorer)
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
+"UseCompactMode"=dword:00000001
 
-; [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa]
-; "DisableLoopbackCheck"=dword:00000001
+; enable network drives over uac
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System]
+"EnableLinkedConnections"=dword:00000001
+"LocalAccountTokenFilterPolicy"=dword:00000001
+"EnableVirtualization"=dword:00000000
 
-; onedrive
-; disable onedrive user folder backup [ optional ]
-; [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\OneDrive]
-; "KFMBlockOptIn"=dword:00000001
-
-; hide onedrive folder
-[-HKEY_CLASSES_ROOT\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}]
-"System.IsPinnedToNameSpaceTree"=dword:0
-
-[-HKEY_CLASSES_ROOT\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}]
-"System.IsPinnedToNameSpaceTree"=dword:0
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa]
+"DisableLoopbackCheck"=dword:00000001
 
 ; hide lock screen
 [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI\SessionData]
@@ -1996,11 +645,6 @@ E0,F6,C5,D5,0E,CA,50,00,00
 "WaitToKillAppTimeout"="1000"
 "LowLevelHooksTimeout"="1000"
 
-; set audiodg priority to high
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\audiodg.exe\PerfOptions]
-"CpuPriorityClass"=dword:00000003
-"IoPriority"=dword:00000003
-
 ; fix mouse cursor dissapeiring
 [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System]
 "EnableCursorSuppression"=dword:00000000
@@ -2014,25 +658,6 @@ E0,F6,C5,D5,0E,CA,50,00,00
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\PushToInstall]
 "DisablePushToInstall"=dword:00000001
 
-; Prevent Print Spooler to start automatically with windows
-[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\Spooler]
-"Start"=dword:00000003
-
-; Disable Windows Search Indexing
-[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\WSearch]
-"Start"=dword:00000004
-
-; clean adobe type manager
-[-HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Font Drivers]
-
-; prevent print spooler from starting automatically with windows
-[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\Spooler]
-"Start"=dword:00000003
-
-; disable windows search indexing
-[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\WSearch]
-"Start"=dword:00000004
-
 ; Allow double-click execution of .ps1 files (Windows PowerShell)
 [HKEY_CLASSES_ROOT\Applications\powershell.exe\shell\open\command]
 @="C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoLogo -ExecutionPolicy Unrestricted -File \"%1\""
@@ -2041,560 +666,267 @@ E0,F6,C5,D5,0E,CA,50,00,00
 [HKEY_CLASSES_ROOT\Applications\pwsh.exe\shell\open\command]
 @="C:\\Program Files\\PowerShell\\7\\pwsh.exe -NoLogo -ExecutionPolicy Unrestricted -File \"%1\""
 
+; FrameSync Labs Registry Tweaks
 
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power]
+"CoalescingTimerInterval"=dword:00000000
 
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows]
+"TimerCoalescing"=hex:00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
+00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
+00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
+00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
+00,00,00,00,00,00,00,00
 
-; Created by: Shawn Brink
-; Created on: September 28th 2015
-; Updated on: August 28th 2019
-; Tutorial: https://www.tenforums.com/tutorials/24412-add-remove-default-new-context-menu-items-windows-10-a.html
+[HKEY_CURRENT_USER\Control Panel\Desktop]
+"ScreenSaveActive"="0"
+"ScreenSaveTimeOut"="0"
+"SCRNSAVE.EXE"=-
 
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet]
+"EnableActiveProbing"=dword:00000000
 
-; Text Document
-[-HKEY_CLASSES_ROOT\.txt\ShellNew]
-[HKEY_CLASSES_ROOT\.txt\ShellNew]
-"ItemName"=hex(2):40,00,25,00,53,00,79,00,73,00,74,00,65,00,6d,00,52,00,6f,00,\
-  6f,00,74,00,25,00,5c,00,73,00,79,00,73,00,74,00,65,00,6d,00,33,00,32,00,5c,\
-  00,6e,00,6f,00,74,00,65,00,70,00,61,00,64,00,2e,00,65,00,78,00,65,00,2c,00,\
-  2d,00,34,00,37,00,30,00,00,00
-"NullFile"=""
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power]
+"EventProcessorEnabled"=dword:00000000
 
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Dwm]
+"OverlayTestMode"=dword:00000005
+"OverlayMinFPS"=dword:0000270f
+
+[HKEY_CURRENT_USER\System\GameConfigStore]
+"GameDVR_FSEBehaviorMode"=dword:00000002
+"GameDVR_FSEBehavior"=dword:00000002
+
+[HKEY_CURRENT_USER\Control Panel\Accessibility\MouseKeys]
+"Flags"="0"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Segment Heap]
+"Enabled"=dword:00000001
+"OverrideServerSKU"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager]
+"ScopeType"="Client"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power]
+"SleepStudyDisabled"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\kernel]
+"ThreadDpcEnable"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\Scheduler]
+"QueuedPresentLimit"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers]
+"HwSchMode"=dword:00000002
+"HwSchTreatExperimentalAsStable"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\kernel]
+"SerializeTimerExpiration"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Quota System]
+"EnableCpuQuota"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\mouclass\Parameters]
+"MouseDataQueueSize"=dword:00000023
+
+; SECURITY
+
+Windows Registry Editor Version 5.00
+
+; Disable Sharing mapped drives
+[-HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System]
+
+; Disable Process and Kernel Mitigations
+[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\kernel]
+"DisableExceptionChainValidation"=dword:00000001
+"KernelSEHOPEnabled"=dword:00000000
+"MitigationOptions"=hex:22,22,22,20,22,02,20,22,22,22,22,22,22,20,02,00,00,00,20,00,02,00,00,00,00,00,00,00
+"MitigationAuditOptions"=hex:00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
 
-[-HKEY_CLASSES_ROOT\.txt]
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management]
+"EnableCfg"=dword:00000000
+"MoveImages"=dword:00000000
 
-[HKEY_CLASSES_ROOT\.txt]
-@="txtfile"
-"Content Type"="text/plain"
-"PerceivedType"="text"
+; Disable DMA remapping
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\PolicyManager\default\DmaGuard\DeviceEnumerationPolicy]
+"value"=dword:00000002
 
-[HKEY_CLASSES_ROOT\.txt\PersistentHandler]
-@="{5e941d80-bf96-11cd-b579-08002b30bfeb}"
+; WDigest
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\Wdigest]
+"UseLogonCredential"=dword:00000000
 
-[HKEY_CLASSES_ROOT\.txt\ShellNew]
-"ItemName"=hex(2):40,00,25,00,53,00,79,00,73,00,74,00,65,00,6d,00,52,00,6f,00,\
-  6f,00,74,00,25,00,5c,00,73,00,79,00,73,00,74,00,65,00,6d,00,33,00,32,00,5c,\
-  00,6e,00,6f,00,74,00,65,00,70,00,61,00,64,00,2e,00,65,00,78,00,65,00,2c,00,\
-  2d,00,34,00,37,00,30,00,00,00
-"NullFile"=""
+; Block untrusted fonts
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows NT\MitigationOptions]
+"MitigationOptions_FontBocking"=qword:000100000000000000
 
-[-HKEY_CLASSES_ROOT\SystemFileAssociations\.txt]
-
-[HKEY_CLASSES_ROOT\SystemFileAssociations\.txt]
-"PerceivedType"="document"
-
-[-HKEY_CLASSES_ROOT\txtfile]
-
-[HKEY_CLASSES_ROOT\txtfile]
-@="Text Document"
-"EditFlags"=dword:00210000
-"FriendlyTypeName"=hex(2):40,00,25,00,53,00,79,00,73,00,74,00,65,00,6d,00,52,\
-  00,6f,00,6f,00,74,00,25,00,5c,00,73,00,79,00,73,00,74,00,65,00,6d,00,33,00,\
-  32,00,5c,00,6e,00,6f,00,74,00,65,00,70,00,61,00,64,00,2e,00,65,00,78,00,65,\
-  00,2c,00,2d,00,34,00,36,00,39,00,00,00
-
-[HKEY_CLASSES_ROOT\txtfile\DefaultIcon]
-@=hex(2):25,00,53,00,79,00,73,00,74,00,65,00,6d,00,52,00,6f,00,6f,00,74,00,25,\
-  00,5c,00,73,00,79,00,73,00,74,00,65,00,6d,00,33,00,32,00,5c,00,69,00,6d,00,\
-  61,00,67,00,65,00,72,00,65,00,73,00,2e,00,64,00,6c,00,6c,00,2c,00,2d,00,31,\
-  00,30,00,32,00,00,00
-
-[HKEY_CLASSES_ROOT\txtfile\shell\open\command]
-@=hex(2):25,00,53,00,79,00,73,00,74,00,65,00,6d,00,52,00,6f,00,6f,00,74,00,25,\
-  00,5c,00,73,00,79,00,73,00,74,00,65,00,6d,00,33,00,32,00,5c,00,4e,00,4f,00,\
-  54,00,45,00,50,00,41,00,44,00,2e,00,45,00,58,00,45,00,20,00,25,00,31,00,00,\
-  00
-
-[HKEY_CLASSES_ROOT\txtfile\shell\print\command]
-@=hex(2):25,00,53,00,79,00,73,00,74,00,65,00,6d,00,52,00,6f,00,6f,00,74,00,25,\
-  00,5c,00,73,00,79,00,73,00,74,00,65,00,6d,00,33,00,32,00,5c,00,4e,00,4f,00,\
-  54,00,45,00,50,00,41,00,44,00,2e,00,45,00,58,00,45,00,20,00,2f,00,70,00,20,\
-  00,25,00,31,00,00,00
-
-[HKEY_CLASSES_ROOT\txtfile\shell\printto\command]
-@=hex(2):25,00,53,00,79,00,73,00,74,00,65,00,6d,00,52,00,6f,00,6f,00,74,00,25,\
-  00,5c,00,73,00,79,00,73,00,74,00,65,00,6d,00,33,00,32,00,5c,00,6e,00,6f,00,\
-  74,00,65,00,70,00,61,00,64,00,2e,00,65,00,78,00,65,00,20,00,2f,00,70,00,74,\
-  00,20,00,22,00,25,00,31,00,22,00,20,00,22,00,25,00,32,00,22,00,20,00,22,00,\
-  25,00,33,00,22,00,20,00,22,00,25,00,34,00,22,00,00,00
-
-[-HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.txt]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.txt\OpenWithList]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.txt\OpenWithProgids]
-"txtfile"=hex(0):
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.txt\UserChoice]
-"Hash"="hyXk/CpboWw="
-"ProgId"="txtfile"
-
-[-HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Roaming\OpenWith\FileExts\.txt]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Roaming\OpenWith\FileExts\.txt\UserChoice]
-"Hash"="FvJcqeZpmOE="
-"ProgId"="txtfile"
-
-
-
-
-; MEDIA PLAYER
-
-; Disabling Media Player telemetry
-[HKEY_CURRENT_USER\Software\Policies\Microsoft\WindowsMediaPlayer]
-"PreventCDDVDMetadataRetrieval"=dword:00000001
-"PreventMusicFileMetadataRetrieval"=dword:00000001
-"PreventRadioPresetsRetrieval"=dword:00000001
-
-
-; Created by imribiy
-; https://github.com/imribiy
-; https://discord.gg/XTYEjZNPgX
-
-; This reg file automatically applies Media Player setup phase as you would like to complete, no document history, no data sharing. Can be implemented to the ISOs.
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\Health]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\Player]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\Player\Skins]
-"LastViewModeVTen"=dword:00000002
-"SkinX"=dword:00000000
-"SkinY"=dword:00000000
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\Player\Skins\res://wmploc/RT_TEXT/player.wsz]
-"Prefs"="currentMetadataIconV11;0;FirstRun;0;ap;False;max;False"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\Player\Tasks]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\Player\Tasks\NowPlaying]
-"InitFlags"=dword:00000001
-"ShowHorizontalSeparator"=dword:00000001
-"ShowVerticalSeparator"=dword:00000001
-"PlaylistWidth"=dword:000000ba
-"PlaylistHeight"=dword:00000064
-"SettingsWidth"=dword:00000064
-"SettingsHeight"=dword:00000087
-"MetadataWidth"=dword:000000ba
-"MetadataHeight"=dword:000000a0
-"CaptionsHeight"=dword:00000064
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\Preferences]
-"AutoMetadataCurrent503ServerErrorCount"=dword:00000000
-"AutoMetadataCurrentOtherServerErrorCount"=dword:00000000
-"AutoMetadataCurrentNetworkErrorCount"=dword:00000000
-"AutoMetadataLastResetTime"=dword:293e214e
-"SyncPlaylistsAdded"=dword:00000001
-"MLSChangeIndexMusic"=dword:00000000
-"MLSChangeIndexVideo"=dword:00000000
-"MLSChangeIndexPhoto"=dword:00000000
-"MLSChangeIndexList"=dword:00000000
-"MLSChangeIndexOther"=dword:00000000
-"LibraryHasBeenRun"=dword:00000000
-"FirstRun"=dword:00000000
-"NextLaunchIndex"=dword:00000002
-"XV11"="256"
-"YV11"="144"
-"WidthV11"="2048"
-"HeightV11"="1152"
-"Maximized"="0"
-"Volume"=dword:00000032
-"ModeShuffle"=dword:00000000
-"DisableMRUMusic"=dword:00000001
-"Mute"=dword:00000000
-"Balance"=dword:00000000
-"CurrentEffectType"="Bars"
-"CurrentEffectPreset"=dword:00000003
-"VideoZoom"=dword:00000064
-"AutoMetadataCurrent500ServerErrorCount"=dword:00000000
-"StretchToFit"=dword:00000001
-"ShowEffects"=dword:00000001
-"ShowFullScreenPlaylist"=dword:00000000
-"NowPlayingQuickHide"=dword:00000000
-"ShowTitles"=dword:00000001
-"ShowCaptions"=dword:00000000
-"NowPlayingPlaylist"=dword:00000001
-"NowPlayingMetadata"=dword:00000001
-"NowPlayingSettings"=dword:00000000
-"CurrentDisplayView"="VideoView"
-"CurrentSettingsView"="EQView"
-"CurrentMetadataView"="MediaInfoView"
-"CurrentDisplayPreset"=dword:00000000
-"CurrentSettingsPreset"=dword:00000000
-"CurrentMetadataPreset"=dword:00000000
-"UserDisplayView"="VizView"
-"UserWMPDisplayView"="VizView"
-"UserWMPSettingsView"="EQView"
-"UserWMPMetadataView"="MediaInfoView"
-"UserDisplayPreset"=dword:00000000
-"UserWMPDisplayPreset"=dword:00000000
-"UserWMPSettingsPreset"=dword:00000000
-"UserWMPMetadataPreset"=dword:00000000
-"UserWMPShowSettings"=dword:00000000
-"UserWMPShowMetadata"=dword:00000000
-"ShowAlbumArt"=dword:00000000
-"AutoMetadataCurrentDownloadCount"=dword:00000000
-"MediaLibraryCreateNewDatabase"=dword:00000000
-"TranscodedFilesCacheDefaultSizeSet"=dword:00000001
-"TranscodedFilesCacheSize"=dword:00002a5e
-"LastScreensaverTimeout"=dword:00003a98
-"LastScreensaverState"=dword:00000005
-"LastScreensaverSetThreadExecutionState"=dword:80000003
-"AppColorLimited"=dword:00000000
-"SQMLaunchIndex"=dword:00000001
-"LaunchIndex"=dword:00000001
-"DisableMRUVideo"=dword:00000001
-"DisableMRUPlaylists"=dword:00000001
-"ShrinkToFit"=dword:00000000
-"DisableMRUPictures"=dword:00000001
-"UsageTracking"=dword:00000000
-"SilentAcquisition"=dword:00000000
-"SendUserGUID"=hex(3):00
-"MetadataRetrieval"=dword:00000000
-"AcceptedPrivacyStatement"=dword:00000001
-"ModeLoop"=dword:00000000
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\Preferences\EqualizerSettings]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\Preferences\HME]
-"LocalLibraryID"="{95ADD7BE-43A3-4FD9-A4C8-453B88711A10}"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\Preferences\ProxySettings]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\Preferences\ProxySettings\HTTP]
-"ProxyName"=""
-"ProxyPort"=dword:00000050
-"ProxyExclude"=""
-"ProxyBypass"=dword:00000000
-"ProxyStyle"=dword:00000001
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\Preferences\ProxySettings\RTSP]
-"ProxyStyle"=dword:00000000
-"ProxyName"=""
-"ProxyPort"=dword:0000022a
-"ProxyBypass"=dword:00000000
-"ProxyExclude"=""
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\Preferences\VideoSettings]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\UIPlugins]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\UIPlugins\{1F32514F-1561-4922-A604-8A1F478B5A42}]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\UIPlugins\{52903d79-f993-4de6-8317-20c9c176d823}]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\UIPlugins\{5DF031B7-6A37-42D9-8802-E27F4F224332}]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\UIPlugins\{5F4BB5C9-4652-489B-8601-EEC0C3C32E2E}]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\UIPlugins\{7F2B1D6B-1357-402C-A1C8-67E59583B41D}]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\UIPlugins\{93075F62-16B3-43EC-A53B-FFAD0E01D5E7}]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\UIPlugins\{9695AEF9-9D03-4671-8F2F-FF49D1BB01C4}]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\UIPlugins\{976ABECA-93F7-4d81-9187-2A6137829675}]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\UIPlugins\{99DB05E3-F81E-4C8A-A252-F396306AB6FE}]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\UIPlugins\{9F9562EB-15B6-46C6-A7CB-0A66FC65130E}]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\UIPlugins\{9FA014E3-076F-4865-A73C-117131B8E292}]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\UIPlugins\{C1B5977D-9801-4D80-8592-143A044568AF}]
-"AttemptedAutoRun"=dword:00000001
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\UIPlugins\{D5E49195-ED19-40fb-9EE0-E6625A808B77}]
-"AttemptedAutoRun"=dword:00000001
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\UIPlugins\{E641D09E-E500-4c09-8260-F1CD7B902E9C}]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\UIPlugins\{F24A1BC2-2331-4B91-8A13-5A549DA56E9D}]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\MediaPlayer\UIPlugins\{FD981763-B6BB-4d51-9143-6D372A0ED56F}]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows Media]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows Media\WMSDK]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows Media\WMSDK\General]
-"UniqueID"="{326EA348-9669-4511-8B5D-82373066F6FB}"
-"VolumeSerialNumber"=dword:5acb5c10
-"ComputerName"="XOS"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows Media\WMSDK\Namespace]
-"DTDFile"="C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\Windows Media\\12.0\\WMSDKNS.DTD"
-"LocalDelta"="C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\Windows Media\\12.0\\WMSDKNSD.XML"
-"RemoteDelta"="C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\Windows Media\\12.0\\WMSDKNSR.XML"
-"LocalBase"="C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\Windows Media\\12.0\\WMSDKNS.XML"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Search\JumplistData]
-"Microsoft.Windows.MediaPlayer32"=hex(b):E8,DF,57,F3,0D,E9,D7,01
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\application/vnd.ms-wpl]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\application/vnd.ms-wpl\UserChoice]
-"Progid"="WMP11.AssocMIME.WPL"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\application/x-mplayer2]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\application/x-mplayer2\UserChoice]
-"Progid"="WMP11.AssocMIME.ASF"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\application/x-ms-wmd]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\application/x-ms-wmd\UserChoice]
-"Progid"="WMP11.AssocMIME.WMD"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\application/x-ms-wmz]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\application/x-ms-wmz\UserChoice]
-"Progid"="WMP11.AssocMIME.WMZ"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/3gpp]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/3gpp2]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/3gpp2\UserChoice]
-"Progid"="WMP11.AssocMIME.3G2"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/3gpp\UserChoice]
-"Progid"="WMP11.AssocMIME.3GP"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/aiff]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/aiff\UserChoice]
-"Progid"="WMP11.AssocMIME.AIFF"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/basic]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/basic\UserChoice]
-"Progid"="WMP11.AssocMIME.AU"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/mid]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/mid\UserChoice]
-"Progid"="WMP11.AssocMIME.MIDI"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/midi]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/midi\UserChoice]
-"Progid"="WMP11.AssocMIME.MIDI"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/mp3]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/mp3\UserChoice]
-"Progid"="WMP11.AssocMIME.MP3"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/mp4]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/mp4\UserChoice]
-"Progid"="WMP11.AssocMIME.M4A"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/mpeg]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/mpeg\UserChoice]
-"Progid"="WMP11.AssocMIME.MP3"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/mpegurl]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/mpegurl\UserChoice]
-"Progid"="WMP11.AssocMIME.M3U"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/mpg]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/mpg\UserChoice]
-"Progid"="WMP11.AssocMIME.MP3"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/vnd.dlna.adts]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/vnd.dlna.adts\UserChoice]
-"Progid"="WMP11.AssocMIME.ADTS"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/wav]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/wav\UserChoice]
-"Progid"="WMP11.AssocMIME.WAV"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-aiff]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-aiff\UserChoice]
-"Progid"="WMP11.AssocMIME.AIFF"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-flac]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-flac\UserChoice]
-"Progid"="WMP11.AssocMIME.FLAC"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-matroska]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-matroska\UserChoice]
-"Progid"="WMP11.AssocMIME.MKA"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-mid]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-mid\UserChoice]
-"Progid"="WMP11.AssocMIME.MIDI"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-midi]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-midi\UserChoice]
-"Progid"="WMP11.AssocMIME.MIDI"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-mp3]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-mp3\UserChoice]
-"Progid"="WMP11.AssocMIME.MP3"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-mpeg]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-mpeg\UserChoice]
-"Progid"="WMP11.AssocMIME.MP3"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-mpegurl]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-mpegurl\UserChoice]
-"Progid"="WMP11.AssocMIME.M3U"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-mpg]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-mpg\UserChoice]
-"Progid"="WMP11.AssocMIME.MP3"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-ms-wax]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-ms-wax\UserChoice]
-"Progid"="WMP11.AssocMIME.WAX"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-ms-wma]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-ms-wma\UserChoice]
-"Progid"="WMP11.AssocMIME.WMA"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-wav]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\audio/x-wav\UserChoice]
-"Progid"="WMP11.AssocMIME.WAV"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\midi/mid]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\midi/mid\UserChoice]
-"Progid"="WMP11.AssocMIME.MIDI"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/3gpp]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/3gpp2]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/3gpp2\UserChoice]
-"Progid"="WMP11.AssocMIME.3G2"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/3gpp\UserChoice]
-"Progid"="WMP11.AssocMIME.3GP"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/avi]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/avi\UserChoice]
-"Progid"="WMP11.AssocMIME.AVI"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/mp4]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/mp4\UserChoice]
-"Progid"="WMP11.AssocMIME.MP4"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/mpeg]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/mpeg\UserChoice]
-"Progid"="WMP11.AssocMIME.MPEG"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/mpg]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/mpg\UserChoice]
-"Progid"="WMP11.AssocMIME.MPEG"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/msvideo]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/msvideo\UserChoice]
-"Progid"="WMP11.AssocMIME.AVI"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/quicktime]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/quicktime\UserChoice]
-"Progid"="WMP11.AssocMIME.MOV"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/vnd.dlna.mpeg-tts]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/vnd.dlna.mpeg-tts\UserChoice]
-"Progid"="WMP11.AssocMIME.TTS"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-matroska]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-matroska-3d]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-matroska-3d\UserChoice]
-"Progid"="WMP11.AssocMIME.MK3D"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-matroska\UserChoice]
-"Progid"="WMP11.AssocMIME.MKV"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-mpeg]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-mpeg2a]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-mpeg2a\UserChoice]
-"Progid"="WMP11.AssocMIME.MPEG"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-mpeg\UserChoice]
-"Progid"="WMP11.AssocMIME.MPEG"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-ms-asf]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-ms-asf-plugin]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-ms-asf-plugin\UserChoice]
-"Progid"="WMP11.AssocMIME.ASX"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-ms-asf\UserChoice]
-"Progid"="WMP11.AssocMIME.ASX"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-ms-wm]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-ms-wm\UserChoice]
-"Progid"="WMP11.AssocMIME.ASF"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-ms-wmv]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-ms-wmv\UserChoice]
-"Progid"="WMP11.AssocMIME.WMV"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-ms-wmx]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-ms-wmx\UserChoice]
-"Progid"="WMP11.AssocMIME.ASX"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-ms-wvx]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-ms-wvx\UserChoice]
-"Progid"="WMP11.AssocMIME.WVX"
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-msvideo]
-
-[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\MIMEAssociations\video/x-msvideo\UserChoice]
-"Progid"="WMP11.AssocMIME.AVI"
-
-; prevent-media-sharing
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\WindowsMediaPlayer]
-"PreventLibrarySharing"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\WindowsMediaPlayer]
-"PreventLibrarySharing"=dword:00000001
-
-;prevent-windows-media-drm-internet-access-reg
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\WMDRM]
-"DisableOnline"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Policies\Microsoft\WMDRM]
-"DisableOnline"=dword:00000001
+; Prevent DLL Hijacking
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager]
+"CWDIllegalInDllSearch"=dword:00000002
+"SafeDLLSearchMode"=dword:00000001
+
+; Prevent unauthenticated RPC connections
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows NT\Rpc]
+"RestrictRemoteClients"=dword:00000001
+
+; Block anonymous enumeration
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa]
+"RestrictAnonymousSAM"=dword:00000001
+"RestrictAnonymous"=dword:00000001
+
+; Disable PC discoverable on network
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control]
+"NewNetworkWindowOff"=dword:00000001
+
+; Disable DEP
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Explorer]
+"NoDataExecutionPrevention"=dword:00000001
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\System]
+"DisableHHDEP"=dword:00000001
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Internet Explorer\Main]
+"DEPOff"=dword:00000001
+
+; Disable Windows Connect Now wizard
+[HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\WCN\UI]
+"DisableWcnUi"=dword:00000001
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\WCN\Registrars]
+"DisableFlashConfigRegistrar"=dword:00000000
+"DisableInBand802DOT11Registrar"=dword:00000000
+"DisableUPnPRegistrar"=dword:00000000
+"DisableWPDRegistrar"=dword:00000000
+"EnableRegistrars"=dword:00000000
+
+; Disable Mitigations on csrss
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\csrss.exe]
+"MitigationAuditOptions"=hex:22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22
+"MitigationOptions"=hex:22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22
+
+; Disable Kernel-Managed Memory and disable Meltdown/Spectre patches
+[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Memory Management]
+"FeatureSettings"=dword:00000000
+"FeatureSettingsOverride"=dword:00000003
+"FeatureSettingsOverrideMask"=dword:00000003
+
+; Disable additional NTFS/ReFS mitigations
+[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager]
+"ProtectionMode"=dword:00000000
+
+; Disable Intel TSX mitigation
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Kernel]
+"DisableTsx"=dword:00000000
+
+
+; disable password reveal button
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\CredUI]
+"DisablePasswordReveal"=dword:00000001
+
+; disable firewall notifications
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Defender Security Center\Notifications]
+"DisableEnhancedNotifications"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Defender Security Center\Virus and threat protection]
+"NoActionNotificationDisabled"=dword:00000001
+"SummaryNotificationDisabled"=dword:00000001
+"FilesBlockedNotificationDisabled"=dword:00000001
+
+[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows Defender Security Center\Account protection]
+"DisableNotifications"=dword:00000001
+"DisableDynamiclockNotifications"=dword:00000001
+"DisableWindowsHelloNotifications"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\System\ControlSet001\Services\SharedAccess\Epoch]
+"Epoch"=dword:000004cf
+
+[HKEY_LOCAL_MACHINE\System\ControlSet001\Services\SharedAccess\Parameters\FirewallPolicy\DomainProfile]
+"DisableNotifications"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\System\ControlSet001\Services\SharedAccess\Parameters\FirewallPolicy\PublicProfile]
+"DisableNotifications"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\System\ControlSet001\Services\SharedAccess\Parameters\FirewallPolicy\StandardProfile]
+"DisableNotifications"=dword:00000001
+
+; Disable Core Isolation Memory Integrity
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity]
+"Enabled"=dword:00000000
+
+; Disable DMA memory protection and cores isolation (virtualization-based protection)
+[HKEY_LOCAL_MACHINE\System\ControlSet001\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity]
+"ChangedInBootCycle"=-
+"WasEnabledBy"=-
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\DeviceGuard]
+"EnableVirtualizationBasedSecurity"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\FVE]
+"DisableExternalDMAUnderLock"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Windows\DeviceGuard]
+"EnableVirtualizationBasedSecurity"=dword:00000000
+"HVCIMATRequired"=dword:00000000
+"RequirePlatformSecurityFeatures"=dword:00000001
+"HypervisorEnforcedCodeIntegrity"=dword:00000000
+"LsaCfgFlags"=dword:00000000
+"ConfigureSystemGuardLaunch"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\DeviceGuard]
+"RequireMicrosoftSignedBootChain"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity]
+"WasEnabledBy"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios]
+"HypervisorEnforcedCodeIntegrity"=dword:00000000
+
+; hide family options settings
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows Defender Security Center\Family options]
+"UILockdown"=dword:00000001
+
+; hide account protection settings
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows Defender Security Center\Account protection]
+"UILockdown"=dword:00000001
+
+; increase system restore point creation frequency
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore]
+"SystemRestorePointCreationFrequency"=dword:00000000
+
+; limit defender cpu usage
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows Defender\Scan]
+"AvgCPULoadFactor"=dword:00000019
+"ScanAvgCPULoadFactor"=dword:00000019
+
+; dwm tweaks
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows]
+"DesktopHeapLogging"=dword:00000000
+"DwmInputUsesIoCompletionPort"=dword:00000000
+"EnableDwmInputProcessing"=dword:00000000
+
+; increase explorer responses
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\mouhid\Parameters]
+"TreatAbsolutePointerAsAbsolute"=dword:00000001
+"TreatAbsoluteAsRelative"=dword:00000000
+
+; Disable Drivers from Windows Update
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\PolicyManager\current\device\Update]
+"ExcludeWUDriversInQualityUpdate"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\PolicyManager\default\Update]
+"ExcludeWUDriversInQualityUpdate"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings]
+"ExcludeWUDriversInQualityUpdate"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate]
+"ExcludeWUDriversInQualityUpdate"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\PolicyManager\default\Update\ExcludeWUDriversInQualityUpdate]
+"value"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Device Metadata]
+"PreventDeviceMetadataFromNetwork"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\DriverSearching]
+"SearchOrderConfig"=dword:00000000
+"DontSearchWindowsUpdate"=dword:00000001
 
 
 
@@ -3494,218 +1826,1238 @@ E0,F6,C5,D5,0E,CA,50,00,00
 [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\RtkAudioUniversalService]
 "Start"=dword:00000004
 
+; --------------------------------------------------------------------------------------------------
+;   @script       windows-updates-pause.reg
+;   @author       Aetherinox
+;   @url          https://github.com/Aetherinox/pause-windows-updates
+;
+;   A script to pause Windows Updates for a long period of time.
+;
+;   User can un-pause updates by opening the 'Windows Update' window.
+;   You can also access that window by opening your start menu, select 'Run'
+;   and type
+;       ms-settings:windowsupdate
+;
+;   You can also re-enable updates by executing the other file included
+;   in the repo URL above:
+;       windows-updates-unpause.reg
+; --------------------------------------------------------------------------------------------------
 
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings]
+"PauseFeatureUpdatesStartTime"="2025-01-01T00:00:00Z"
+"PauseFeatureUpdatesEndTime"="2051-12-31T00:00:00Z"
+"PauseQualityUpdatesStartTime"="2025-01-01T00:00:00Z"
+"PauseQualityUpdatesEndTime"="2051-12-31T00:00:00Z"
+"PauseUpdatesStartTime"="2025-01-01T00:00:00Z"
+"PauseUpdatesExpiryTime"="2051-12-31T00:00:00Z"
+"ActiveHoursStart"=dword:0000000d
+"ActiveHoursEnd"=dword:00000007
+"FlightSettingsMaxPauseDays"=dword:00002727
 
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\WaaSMedicSvc]
+"Start"=dword:00000003
+"FailureActions"=hex:00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
+  00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
 
-; FrameSync Labs
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU]
+"AUOptions"=dword:00000001
+"NoAutoUpdate"=dword:00000001
+"NoAUShutdownOption"=dword:00000001
+"AlwaysAutoRebootAtScheduledTime"=dword:00000000
+"NoAutoRebootWithLoggedOnUsers"=dword:00000001
+"AutoInstallMinorUpdates"=dword:00000000
+"UseWUServer"=dword:00000000
 
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power]
-"CoalescingTimerInterval"=dword:00000000
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\WindowsUpdate\UpdatePolicy\Settings]
+"PausedFeatureStatus"=dword:00000001
+"PausedQualityStatus"=dword:00000001
+"PausedQualityDate"="2025-01-01T00:00:00Z"
+"PausedFeatureDate"="2025-01-01T00:00:00Z"
 
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows]
-"TimerCoalescing"=hex:00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
-00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
-00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
-00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
-00,00,00,00,00,00,00,00
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\PolicyManager\current\device\Update]
+"ExcludeWUDriversInQualityUpdate"=dword:00000001
 
-[HKEY_CURRENT_USER\Control Panel\Desktop]
-"ScreenSaveActive"="0"
-"ScreenSaveTimeOut"="0"
-"SCRNSAVE.EXE"=-
+; DWM tweaks
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\DWM]
+"FrameLatency"=dword:00000002
 
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\Scheduler]
-"EnablePreemption"=dword:00000001
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\DWM]
+"ForceDirectDrawSync"=dword:00000000
 
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet]
-"EnableActiveProbing"=dword:00000000
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\DWM]
+"MaxQueuedPresentBuffers"=dword:00000001
 
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power]
-"EventProcessorEnabled"=dword:00000000
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Dwm]
-"OverlayTestMode"=dword:00000005
-"OverlayMinFPS"=dword:0000270f
-
-[HKEY_CURRENT_USER\System\GameConfigStore]
-"GameDVR_FSEBehaviorMode"=dword:00000002
-"GameDVR_FSEBehavior"=dword:00000002
-
-[HKEY_CURRENT_USER\Control Panel\Accessibility\MouseKeys]
-"Flags"="0"
-
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Segment Heap]
-"Enabled"=dword:00000001
-"OverrideServerSKU"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager]
-"ScopeType"="Client"
-
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power]
-"SleepStudyDisabled"=dword:00000001
-
+; Disable InterruptSteering
 [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\kernel]
-"ThreadDpcEnable"=dword:00000000
+"InterruptSteeringDisabled"=dword:00000001
 
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\Scheduler]
-"QueuedPresentLimit"=dword:00000001
+; Resource Sets
+; Founded by Kizzimo
+; Registry made and modified by Alchemy Tweaks
 
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers]
-"HwSchMode"=dword:00000002
-"HwSchTreatExperimentalAsStable"=dword:00000001
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets]
 
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\ApplicationService]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\ApplicationServiceElastic]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\ApplicationServiceHighPriElastic]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\ApplicationServiceHighPriority]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\ApplicationServiceRemote]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\AppToAppTarget]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\BackgroundAudioPlayer]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\BackgroundCachedFileUpdater]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\BackgroundTaskCompletion]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\BackgroundTaskDebug]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\BackgroundTransfer]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\BackgroundTransferNetworkState]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\Balloon]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\CalendarProviderAsChild]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\CallingEvent]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\CallingEventHighPriority]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\ChatMessageNotification]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\ComponentTarget]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\ContinuousBackgroundExecution]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\CortanaSpeechBackground]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\CreateProcess]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\DefaultModernBackgroundTask]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\DefaultPPLE]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\DefaultPPLE2]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\EmCreateProcess]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\EmCreateProcessNormalPriority]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\EmptyHost]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\EmptyHostHighPriority]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\EmptyHostPPLE]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\FileProviderTarget]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\ForegroundAgent]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\ForegroundCachedFileUpdater]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\ForegroundTaskCompletion]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\Frozen]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\GenericExtendedExecution]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\GeofenceTask]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\HighPriorityBackgroundAgent]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\HighPriorityBackgroundDemoted]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\HighPriorityBackgroundTransfer]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\IoTStartupTask]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\JumboForegroundAgent]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\LmaBackgroundTaskCompletion]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\LmaDefaultModernBackgroundTask]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\LmaPrelaunchForeground]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\LmaUiDebugModeForeground]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\LmaUiFrozen]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\LmaUiFrozenDNCS]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\LmaUiFrozenDNK]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\LmaUiFrozenHighPriority]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\LmaUiModernForeground]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\LmaUiModernForegroundLarge]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\LmaUiPaused]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\LmaUiPausedDNK]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\LmaUiPausedHighPriority]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\LmaUiPausing]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\LongRunningBluetooth]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\LongRunningControlChannel]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\LongRunningSensor]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\MediaProcessing]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\OemBackgroundAgent]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\OemTask]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\PendingDefaultPPLE]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\PiP]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\PreinstallTask]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\PrelaunchForeground]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\PushTriggerTask]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\ResourceIntensive]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\ShareDataPackageHost]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\ShortRunningBluetooth]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\TaskCompletionHighPriority]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiComposer]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiDebugModeForeground]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiForegroundDNK]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiFrozen]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiFrozenDNCS]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiFrozenDNK]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiFrozenHighPriority]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiLockScreen]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiModernForeground]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiModernForegroundExtended]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiModernForegroundLarge]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiOverlay]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiPaused]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiPausedDNK]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiPausedHighPriority]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiPausing]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiPausingLowPriority]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiShellCustom1]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiShellCustom2]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiShellCustom3]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\UiShellCustom4]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\VideoTranscoding]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\VoipActiveCallBackground]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\VoipActiveCallBackgroundPriority]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\VoipActiveCallForeground]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\VoipForegroundWorker]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\VoipSuspendedBackground]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\VoipWorker]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\Vpn]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ResourcePolicyStore\ResourceSets\PolicySets\WebAuthSignIn]
+"CPU"="UnmanagedAboveNormal"
+"ExternalResources"="ResourceIntensive"
+"Flags"="Foreground"
+"Importance"="Critical"
+"IO"="NoCap"
+"Memory"="NoCap"
+
+; SerializeTimerExpiration (Value 1).reg
 [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\kernel]
-"SerializeTimerExpiration"=dword:00000000
+"SerializeTimerExpiration"=dword:00000001
 
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Quota System]
-"EnableCpuQuota"=dword:00000000
+; Power Profile Events Priorities Tweaks
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\Profile\Events\{54533251-82be-4824-96c1-47b60b740d00}\{0AABB002-A307-447e-9B81-1D819DF6C6D0}]
+"Name"="SustainedPerf"
+"Pri"=-
 
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\mouclass\Parameters]
-"MouseDataQueueSize"=dword:00000023
-"@
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\Profile\Events\{54533251-82be-4824-96c1-47b60b740d00}\{0c3d5326-944b-4aab-8ad8-fe422a0e50e0}]
+"Name"="MultimediaQos"
+"Pri"=-
 
-				Set-Content -Path "$env:TEMP\Registry Optimize.reg" -Value $MultilineComment -Force
-	            # edit reg file
-                $path = "$env:TEMP\Registry Optimize.reg"
-                (Get-Content $path) -replace "\?","$" | Out-File $path
-                # Download blanc.ico into C:\Windows
-                Invoke-WebRequest -Uri "https://github.com/benzaria/remove_shortcut_arrow/raw/refs/heads/main/blanc.ico" -OutFile "C:\\Windows\\blanc.ico"
-	            # import reg file
-                Regedit.exe /S "$env:TEMP\Registry Optimize.reg"
-                Timeout /T 1 | Out-Null
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\Profile\Events\{54533251-82be-4824-96c1-47b60b740d00}\{0DA965DC-8FCF-4c0b-8EFE-8DD5E7BC959A}]
+"Name"="LowLatency"
+"Pri"=-
 
-				# UPDATES
-				# Pause Windows updates
-				Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/Aetherinox/pause-windows-updates/raw/refs/heads/main/windows-updates-pause.reg" -OutFile "$env:TEMP\windows-updates-pause.reg"
-				Start-Process reg.exe -ArgumentList "import `"$env:TEMP\windows-updates-pause.reg`"" -Wait
-				
-				# Sets Windows Update to recommended settings
-				Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/ChrisTitusTech/winutil/raw/refs/heads/main/functions/public/Invoke-WPFUpdatessecurity.ps1" -OutFile "$env:TEMP\Invoke-WPFUpdatessecurity.ps1"
-				(Get-Content "$env:TEMP\Invoke-WPFUpdatessecurity.ps1") | Where-Object {$_ -notmatch '\[System\.Windows\.MessageBox'} | Set-Content -Path "$env:TEMP\Invoke-WPFUpdatessecurity.ps1" -Encoding UTF8
-				
-				. "$env:TEMP\Invoke-WPFUpdatessecurity.ps1"
-				if (Get-Command Invoke-WPFUpdatessecurity -ErrorAction SilentlyContinue) {
-				    Invoke-WPFUpdatessecurity *> $null 2>&1
-				}
-				
-				# Disable Services Windows 10  
- 				if ((Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').CurrentBuild -le 19045) {
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\Profile\Events\{54533251-82be-4824-96c1-47b60b740d00}\{4569E601-272E-4869-BCAB-1C6C03D7966F}]
+"Name"="LowPower"
+"Pri"=-
 
-					# Disable AppXSvc (AppX Deployment Service)	
-					Set-ItemProperty -Path "HKLM:\SYSTEM\ControlSet001\Services\AppXSvc" -Name "Start" -Value 4 -Type DWord	| Out-Null	
-					# Disable TextInputManagementService (TextInput Management Service)	
-					Set-ItemProperty -Path "HKLM:\SYSTEM\ControlSet001\Services\TextInputManagementService" -Name "Start" -Value 4 -Type DWord | Out-Null
-					# Disable DNS Cache
-					Set-ItemProperty -Path "HKLM:\SYSTEM\ControlSet001\Services\Dnscache" -Name "Start" -Value 4 -Type DWord | Out-Null
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\Profile\Events\{54533251-82be-4824-96c1-47b60b740d00}\{8BC6262C-C026-411d-AE3B-7E2F70811A13}]
+"Name"="Standby"
+"Pri"=-
 
-				} else { $null }
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\Profile\Events\{54533251-82be-4824-96c1-47b60b740d00}\{a4a61b5f-f42c-4d23-b3ab-5c27df9f0f18}]
+"Name"="EntryLevelPerf"
+"Pri"=-
 
-				# Optimize NTFS for performance
-    			fsutil behavior set disablelastaccess 1 | Out-Null 
-    			fsutil behavior set disable8dot3 1 | Out-Null
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\Profile\Events\{54533251-82be-4824-96c1-47b60b740d00}\{c04a802d-2205-4910-ae98-3b51e3bb72f2}]
+"Name"="Background"
+"Pri"=-
 
-				# Disable BitLocker
-				# Disable BitLocker on C:
-				Disable-BitLocker -MountPoint "C:" 2>&1 | Out-Null
-				# Disable Device Encryption via registry
-				New-Item -Path "HKLM:\System\CurrentControlSet\Control" -Name "BitLocker" -Force 2>&1 | Out-Null
-				Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\BitLocker" -Name "PreventDeviceEncryption" -Type DWord -Value 1
-				# Disable EFS (Encrypting File System)
-				fsutil behavior set disableencryption 1 | Out-Null
-				# Additional BitLocker policy: Disable External DMA Under Lock
-				New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft" -Name "FVE" -Force | Out-Null
-				Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\FVE" -Name "DisableExternalDMAUnderLock" -Type DWord -Value 1
-							
-				# group svchost.exe processes
-				$ram = (Get-CimInstance -ClassName Win32_PhysicalMemory | Measure-Object -Property Capacity -Sum).Sum / 1kb
-				Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control" -Name "SvcHostSplitThresholdInKB" -Type DWord -Value $ram -Force
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\Profile\Events\{54533251-82be-4824-96c1-47b60b740d00}\{D4140C81-EBBA-4e60-8561-6918290359CD}]
+"Name"="GameMode"
+"Pri"=-
 
-				# set account passwords to never expire
-				Get-LocalUser | ForEach-Object { Set-LocalUser -Name $_.Name -PasswordNeverExpires $true | Out-Null }
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\Profile\Events\{54533251-82be-4824-96c1-47b60b740d00}\{EE1E4F72-E368-46b1-B3C6-5048B11C2DBD}]
+"Name"="Constrained"
+"Pri"=-
 
-				# BCDEdit
-				netsh interface tcp set global autotuninglevel=disabled
-				bcdedit /set disabledynamictick Yes | Out-Null
-				bcdedit /set useplatformtick Yes | Out-Null
-				bcdedit /set nx AlwaysOff | Out-Null        	
-				bcdedit /set integrityservices disable | Out-Null	
-				bcdedit /set hypervisorlaunchtype off | Out-Null 	
-				bcdedit /set vsmlaunchtype Off | Out-Null     	
-				bcdedit /set vm No | Out-Null           	
-				bcdedit /set isolatedcontext No | Out-Null
-				bcdedit /set useplatformclock no | Out-Null	
-				bcdedit /set tscsyncpolicy Enhanced | Out-Null
-				# forces Windows to use logical destination mode for interrupts
-				# bcdedit /set usephysicaldestination no | Out-Null
-				bcdedit /set bootmenupolicy Legacy | Out-Null	
-				bcdedit /set quietboot yes | Out-Null    
-				bcdedit /set bootux disabled | Out-Null        	
-				bcdedit /set bootlog no | Out-Null       	
-				bcdedit /timeout 3 | Out-Null
-				bcdedit /event off | Out-Null     	
-				bcdedit /bootdebug off | Out-Null
-				bcdedit /set debug no | Out-Null	
-				bcdedit /set ems no | Out-Null
-				bcdedit /set bootems no | Out-Null
-				# disable legacy APIC
-				# bcdedit /set uselegacyapicmode no | Out-Null
-				bcdedit /set sos no | Out-Null
-				
-				# Windows 10 Stuff
-				if ((Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').CurrentBuild -le 19045) {
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\Profile\Events\{54533251-82be-4824-96c1-47b60b740d00}\{0DA965DC-8FCF-4c0b-8EFE-8DD5E7BC959A}\{7E01ADEF-81E6-4e1b-8075-56F373584694}]
+"TimeLimitInSeconds"=dword:00000001
 
-					# Set Desktop Wallpaper and Style
-					Add-Type @"
-using System.Runtime.InteropServices;
-public class Wallpaper {
-    public const int SPI_SETDESKWALLPAPER = 0x0014;
-    public const int SPIF_UPDATEINIFILE = 0x01;
-    public const int SPIF_SENDWININICHANGE = 0x02;
-    [DllImport("user32.dll", CharSet=CharSet.Auto)]
-    public static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
-}
-"@
+; Power Tweaks
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power\EnergyEstimation\TaggedEnergy]
+"DisableTaggedEnergyLogging"=dword:00000001 ;Turns off energy tracking logs that record how much power apps use. Less background logging = slightly less CPU use.
+"TelemetryMaxApplication"=dword:00000000 ;Stops Windows from collecting energy data per app for telemetry (data reporting).
+"TelemetryMaxTagPerApplication"=dword:00000000 ;Stops Windows from tagging and tracking extra details about app energy use.
 
-					$WallpaperPath = "C:\Windows\web\wallpaper\Windows\img0.jpg"
-					Set-ItemProperty "HKCU:\Control Panel\Desktop" -Name "WallpaperStyle" -Value "10"
-					Set-ItemProperty "HKCU:\Control Panel\Desktop" -Name "TileWallpaper" -Value "0"
-					[Wallpaper]::SystemParametersInfo(0x0014, 0, $WallpaperPath, 3) | Out-Null
-					
-					# Show Copy as Path always in right-click menu          
-					$regPath = "Registry::HKEY_CLASSES_ROOT\AllFilesystemObjects\shell\windows.copyaspath"
-					New-Item -Path $regPath -Force | Out-Null; Set-ItemProperty -Path $regPath -Name "(default)" -Value "Copy &as path" | Out-Null
-					Set-ItemProperty -Path $regPath -Name "InvokeCommandOnSelection" -Value 1 -Type DWord | Out-Null
-					Set-ItemProperty -Path $regPath -Name "VerbHandler" -Value "{f3d06e7c-1e45-4a26-847e-f9fcdee59be0}" | Out-Null
-					Set-ItemProperty -Path $regPath -Name "VerbName" -Value "copyaspath" | Out-Null   		
-					
-				}
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Throttle]
+"PerfEnablePackageIdle"=dword:00000000 ;Prevents the system from forcing CPU packages into idle states (C-states). Keeps the CPU more responsive but uses a bit more power.
 
-				# Windows 11 Stuff
-				elseif ((Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').CurrentBuild -ge 22000) {
-					
-					# Global timer resolution requests (Windows 11)
-					reg.exe add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel" /v "GlobalTimerResolutionRequests" /t REG_DWORD /d 1 /f *> $null
-					
-					# Set Desktop Wallpaper and Style
-					Add-Type @"
-using System.Runtime.InteropServices;
-public class Wallpaper {
-    public const int SPI_SETDESKWALLPAPER = 0x0014;
-    public const int SPIF_UPDATEINIFILE = 0x01;
-    public const int SPIF_SENDWININICHANGE = 0x02;
-    [DllImport("user32.dll", CharSet=CharSet.Auto)]
-    public static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
-}
-"@
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power]
+"PlatformAoAcOverride"=dword:00000000 ;Disables Modern Standby (AoAc) so your PC uses classic sleep mode instead of the mobile-style background mode that can cause instability.
 
-					$WallpaperPath = "C:\Windows\web\Wallpaper\Windows\img19.jpg"
-				    Set-ItemProperty "HKCU:\Control Panel\Desktop" -Name "WallpaperStyle" -Value "10"
-				    Set-ItemProperty "HKCU:\Control Panel\Desktop" -Name "TileWallpaper" -Value "0"
-				    [Wallpaper]::SystemParametersInfo(0x0014, 0, $WallpaperPath, 3) | Out-Null
-		            
-				}else{Write-Host $_.Exception.Message -ForegroundColor Red}
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Processor]
+"CPPCEnable"=dword:00000000 ;Turns off Collaborative Processor Performance Control, meaning Windows won’t “negotiate”
+"AllowPepPerfStates"=dword:00000000 ;Blocks Platform Energy Provider (PEP) from managing CPU performance states automatically. Basically, disables “smart” energy saving.
 
-				Stop-Process -Force -Name explorer -ErrorAction SilentlyContinue | Out-Null
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\I/O System]
+"CountOperations"=dword:00000000 ;Disables operation counting in the I/O system Windows won’t measure how many read/write actions apps do. Reduces logging overhead.
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\fssProv]
+"EncryptProtocol"=dword:00000000 ;Turns off forced encryption in the File System Shadow Copy Provider (used by backups). Rarely affects daily use.
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\pci\Parameters]
+"ASPMOptOut"=dword:00000001 ;Tells Windows to ignore PCIe power-saving features (ASPM). Keeps PCIe devices (like GPUs, SSDs) always ready and avoids latency spikes.
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule]
+"DisableRpcOver"=dword:00000001 ;Disables RPC over Scheduler, stopping certain scheduled background communications or telemetry tasks. Reduces remote calls made by Windows.
+
+; Kernel Tweaks
+; Base tweaks
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\kernel]
+"DisableOverlappedExecution"=dword:00000000
+"PriorityControl"=dword:00000032
+"QuantumLength"=dword:00000014
+"TimeIncrement"=dword:0000000f
+
+; Advanced tweaks
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\kernel]
+"DisableLowQosTimerResolution"=dword:00000001
+
+; DPC Tweaks
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\kernel]
+"DpcWatchdogProfileOffset"=dword:00000000
+"DpcTimeout"=dword:00000000
+"IdealDpcRate"=dword:00000001
+"MaximumDpcQueueDepth"=dword:00000001
+"MinimumDpcRate"=dword:00000001
+"DpcWatchdogPeriod"=dword:00000000
+"UnlimitDpcQueue"=dword:00000001
+
+; SplitLargeCaches
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\kernel]
+"SplitLargeCaches"=dword:00000001
+
+; NVMe Tweaks
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\stornvme\Parameters]
+"StorNVMeAllowZeroLatency"=dword:00000001
+"QueueDepth"=dword:00000040
+"NvmeMaxReadSplit"=dword:00000004
+"NvmeMaxWriteSplit"=dword:00000004
+"ForceFlush"=dword:00000001
+"ImmediateData"=dword:00000001
+"MaxSegmentsPerCommand"=dword:00000100
+"MaxOutstandingCmds"=dword:00000100
+"ForceEagerWrites"=dword:00000001
+"MaxQueuedCommands"=dword:00000100
+"MaxOutstandingIORequests"=dword:00000100
+"NumberOfRequests"=dword:000005DC
+"IoSubmissionQueueCount"=dword:00000003
+"IoQueueDepth"=dword:00000040
+"HostMemoryBufferBytes"=dword:000005DC
+"ArbitrationBurst"=dword:00000100
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\StorNVMe\Parameters\Device]
+"StorNVMeAllowZeroLatency"=dword:00000001
+"QueueDepth"=dword:00000040
+"NvmeMaxReadSplit"=dword:00000004
+"NvmeMaxWriteSplit"=dword:00000004
+"ForceFlush"=dword:00000001
+"ImmediateData"=dword:00000001
+"MaxSegmentsPerCommand"=dword:00000100
+"MaxOutstandingCmds"=dword:00000100
+"ForceEagerWrites"=dword:00000001
+"MaxQueuedCommands"=dword:00000100
+"MaxOutstandingIORequests"=dword:00000100
+"NumberOfRequests"=dword:000005DC
+"IoSubmissionQueueCount"=dword:00000003
+"IoQueueDepth"=dword:00000040
+"HostMemoryBufferBytes"=dword:000005DC
+"ArbitrationBurst"=dword:00000100
+
+; Priority Control Tweaks
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\PriorityControl]
+"AdjustDpcThreshold"=dword:00000320
+"DeepIoCoalescingEnabled"=dword:00000001
+"IdealDpcRate"=dword:00000320
+"ForegroundBoost"=dword:00000001
+"SchedulerAssistThreadFlagOverride"=dword:00000001
+"ThreadBoostType"=dword:00000002
+"ThreadSchedulingModel"=dword:00000001
+'@
+Set-Content -Path "$env:TEMP\RegistryOptimize.reg" -Value $MultilineComment -Force -ErrorAction SilentlyContinue | Out-Null
+# import reg file RunAsTI
+$RegistryOptimize = @'
+Regedit.exe /S "$env:TEMP\RegistryOptimize.reg"
+'@
+RunAsTI powershell "-nologo -windowstyle hidden -command $RegistryOptimize"
+Timeout /T 5 | Out-Null
+
+# TASKS
+# disable OneDrive and Edge scheduled tasks
+Get-ScheduledTask | Where-Object { $_.TaskName -like "*OneDrive*" -or $_.TaskName -like "*Edge*" } | ForEach-Object { Disable-ScheduledTask -TaskName $_.TaskName | Out-Null }
+# disable automatic disk defragmentation
+schtasks /Change /DISABLE /TN "\Microsoft\Windows\Defrag\ScheduledDefrag" | Out-Null	
+# disable security scheduled tasks
+Disable-ScheduledTask -TaskName "Microsoft\Windows\ExploitGuard\ExploitGuard MDM policy Refresh" *> $null
+Disable-ScheduledTask -TaskName "Microsoft\Windows\Windows Defender\Windows Defender Cache Maintenance" *> $null
+Disable-ScheduledTask -TaskName "Microsoft\Windows\Windows Defender\Windows Defender Cleanup" *> $null
+Disable-ScheduledTask -TaskName "Microsoft\Windows\Windows Defender\Windows Defender Scheduled Scan" *> $null
+Disable-ScheduledTask -TaskName "Microsoft\Windows\Windows Defender\Windows Defender Verification" *> $null
+
+# SECURITY
+# set account password to never expire
+Get-LocalUser | ForEach-Object { Set-LocalUser -Name $_.Name -PasswordNeverExpires $true | Out-Null }
+# disable defender telemetry
+Set-MpPreference -CloudBlockLevel 0 -Force | Out-Null
+Set-MpPreference -SubmitSamplesConsent 2 -Force | Out-Null
+Set-MpPreference -MAPSReporting 0 -Force | Out-Null
+Set-MpPreference -DisableCoreServiceECSIntegration $true -Force | Out-Null
+# disable Mitigations
+$batchCode = @'
+@echo off
+setlocal EnableDelayedExpansion
+
+:: Disable Spectre and Meltdown
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v "FeatureSettingsOverride" /t REG_DWORD /d "3" /f > nul
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v "FeatureSettingsOverrideMask" /t REG_DWORD /d "3" /f > nul
+
+:: Disable Structured Exception Handling Overwrite Protection (SEHOP)
+:: Exists in ntoskrnl strings, keep for now
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel" /v "DisableExceptionChainValidation" /t REG_DWORD /d "1" /f > nul
+
+:: Disable Control Flow Guard (CFG)
+:: Find correct mitigation values for different Windows versions
+:: Initialize bit mask in registry by disabling a random mitigation
+PowerShell -NoP -C "Set-ProcessMitigation -System -Disable CFG" > nul
+
+:: Get current bit mask
+for /f "tokens=3 skip=2" %%a in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel" /v "MitigationAuditOptions"') do (
+    set "mitigation_mask=%%a"
+)
+
+:: Set all bits to 2 (Disable all process mitigations)
+for /l %%a in (0,1,9) do (
+    set "mitigation_mask=!mitigation_mask:%%a=2!"
+)
+
+:: Fix Valorant with mitigations disabled - enable CFG
+set "enableCFGApps=valorant valorant-win64-shipping vgtray vgc"
+PowerShell -NoP -C "foreach ($a in $($env:enableCFGApps -split ' ')) {Set-ProcessMitigation -Name $a`.exe -Enable CFG}" > nul
+
+:: Set Data Execution Prevention (DEP) only for operating system components
+:: https://docs.microsoft.com/en-us/windows/win32/memory/data-execution-prevention
+:: https://learn.microsoft.com/en-us/windows-hardware/drivers/devtest/bcdedit--set#verification-settings
+bcdedit /set nx OptIn > nul
+
+:: Apply mask to kernel
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel" /v "MitigationAuditOptions" /t REG_BINARY /d "%mitigation_mask%" /f > nul
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel" /v "MitigationOptions" /t REG_BINARY /d "%mitigation_mask%" /f > nul
+
+:: Disable file system mitigations
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager" /v "ProtectionMode" /t REG_DWORD /d "0" /f > nul
+
+exit /b
+'@
+$bat = "$env:TEMP\Disable All Mitigations.cmd"
+Set-Content -Path $bat -Value $batchCode -Encoding ASCII	
+& $bat | Out-Null
+
+# UPDATES
+# Sets Windows Update to recommended settings
+Write-Host "Disabled driver offering through Windows Update"
+if (!(Test-Path "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings")) {New-Item -Path "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings" -Force | Out-Null}
+# Sets Windows Update to Semi-Annual Channel (Targeted)            
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings" -Name "BranchReadinessLevel" -Type DWord -Value 20 | Out-Null
+# Defers feature updates for 365 days
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings" -Name "DeferFeatureUpdatesPeriodInDays" -Type DWord -Value 365 | Out-Null
+# Defers quality updates for 4 days
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings" -Name "DeferQualityUpdatesPeriodInDays" -Type DWord -Value 4 | Out-Null
+
+# sherifmagdy32 
+# audio
+Get-FileFromWeb "https://github.com/sherifmagdy32/gaming_os_tweaker/raw/refs/heads/main/scripts/tweaks/audio.cmd" "$env:TEMP\audio.cmd"
+& "$env:TEMP\audio.cmd" *> $null
+# disk
+Get-FileFromWeb "https://github.com/sherifmagdy32/gaming_os_tweaker/raw/refs/heads/main/scripts/tweaks/disk.cmd" "$env:TEMP\disk.cmd"
+& "$env:TEMP\disk.cmd" *> $null
+# processes
+Get-FileFromWeb "https://github.com/sherifmagdy32/gaming_os_tweaker/raw/refs/heads/main/scripts/tweaks/processes.cmd" "$env:TEMP\processes.cmd"
+cmd /c "echo y | $env:TEMP\processes.cmd" *> $null
+<#
+# AlchemyTweaks
+# Verified-Tweaks
+# DWM tweaks
+Get-FileFromWeb "https://github.com/AlchemyTweaks/Verified-Tweaks/raw/refs/heads/main/DWM/DWMAdjustablesd-jdallmann.bat" "$env:TEMP\DWMAdjustablesd-jdallmann.bat"
+& "$env:TEMP\DWMAdjustablesd-jdallmann.bat" | Out-Null
+Get-FileFromWeb "https://github.com/AlchemyTweaks/Verified-Tweaks/raw/refs/heads/main/DWM/DWMImmediateRender-Kizzimo.bat" "$env:TEMP\DWMImmediateRender-Kizzimo.bat"
+& "$env:TEMP\DWMImmediateRender-Kizzimo.bat" | Out-Null
+
+# DPC Kernel Tweaks
+Get-FileFromWeb "https://github.com/AlchemyTweaks/Verified-Tweaks/raw/refs/heads/main/Kernel/DPC%20Kernel%20Tweaks/Apply%20DPC%20Kernel%20Tweaks.bat" "$env:TEMP\Apply DPC Kernel Tweaks.bat"
+(Get-Content "$env:TEMP\Apply DPC Kernel Tweaks.bat") -replace 'pause', '' | Out-File "$env:TEMP\Apply DPC Kernel Tweaks.bat" -Encoding ASCII
+& "$env:TEMP\Apply DPC Kernel Tweaks.bat" | Out-Null
+# Kernel Tweaks
+Get-FileFromWeb "https://github.com/AlchemyTweaks/Verified-Tweaks/raw/refs/heads/main/Kernel/Kernel%20Tweaks/Apply%20Kernel%20Tweaks.bat" "$env:TEMP\Apply Kernel Tweaks.bat"
+& "$env:TEMP\Apply Kernel Tweaks.bat" | Out-Null
+# Officially-Verified
+#>
+# MEMORY
+# Disable Memory Compression
+Disable-MMAgent -MemoryCompression *> $null
+# Disable Page Combining
+Disable-MMAgent -PageCombining *> $null
+# Enable Application PreLaunch
+Enable-MMAgent -ApplicationPreLaunch *> $null
+# Group svchost.exe processes
+$ram = (Get-CimInstance -ClassName Win32_PhysicalMemory | Measure-Object -Property Capacity -Sum).Sum / 1kb | Out-Null	
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control" -Name "SvcHostSplitThresholdInKB" -Type DWord -Value $ram -Force | Out-Null			
+
+# NTFS
+fsutil behavior set disabledeletenotify 0 | Out-null
+fsutil behavior set disabledeletenotify refs 0 | Out-null
+fsutil behavior set mftzone 2 | Out-null
+fsutil behavior set disablelastaccess 1 | Out-null
+fsutil behavior set encryptpagingfile 0 | Out-null
+fsutil behavior set memoryusage 2 | Out-null
+fsutil behavior set disable8dot3 1 | Out-null
+# Keep both set to 0, otherwise it will break restore system point.
+fsutil behavior set disablecompression 0 | Out-null
+fsutil behavior set disableencryption 0 | Out-null
+
+# BOOT
+# Enable Legacy F8 Boot Recovery
+If (!(Test-Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Configuration Manager\LastKnownGood')) {New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Configuration Manager\LastKnownGood' -Force | Out-Null}
+New-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Configuration Manager\LastKnownGood' -Name 'Enabled' -Type DWord -Value 1 -Force      
+Start-Process -FilePath cmd.exe -ArgumentList '/c bcdedit /Set {Current} BootMenuPolicy Legacy' -Wait | Out-Null      
+# BCDEdit Tweaks
+# https://docs.microsoft.com/en-us/windows-hardware/drivers/devtest/bcdedit--set#additional-settings
+# Constantly pool interrupts, dynamic tick was implemented as a power saving feature
+# Disable the kernel from being tickless
+bcdedit /set disabledynamictick Yes | Out-Null
+bcdedit /set useplatformtick Yes | Out-Null
+bcdedit /set useplatformclock no | Out-Null
+bcdedit /set tscsyncpolicy Enhanced | Out-Null	
+bcdedit /set bootmenupolicy Legacy | Out-Null
+bcdedit /set integrityservices disable | Out-Null
+bcdedit /set bootux disabled | Out-Null
+bcdedit /set bootlog no | Out-Null
+bcdedit /event off | Out-Null
+bcdedit /bootdebug off | Out-Null
+bcdedit /set debug no | Out-Null
+bcdedit /set ems no | Out-Null
+bcdedit /set bootems no | Out-Null
+bcdedit /set sos no | Out-Null
+# Disable Hyper-V
+bcdedit /set hypervisorlaunchtype off | Out-Null
+# Disable DMA memory protection and cores isolation ("virtualization-based protection").
+bcdedit /set vsmlaunchtype Off | Out-Null
+bcdedit /set vm No | Out-Null
+# Apply MSI to devices by default
+bcdedit /set MSI Default | Out-Null
+netsh interface tcp set global autotuninglevel=disabled | Out-Null
+# Disable 57-bits 5-level paging, also known as "Linear Address 57". Only 100% effective on 10th gen Intel. 256 TB of virtual memory per-disk is way much more than enough anyway.
+bcdedit /set linearaddress57 OptOut | Out-Null
+bcdedit /set increaseuserva 268435328 | Out-Null
+# Disable DEP
+bcdedit /set nx AlwaysOff | Out-Null
+# Disable some of the kernel memory mitigations. Causes boot crash/loops if Intel SGX is enforced and not set to "Application Controlled" or "Off" in your Firmware. Gamers don't use SGX under any possible circumstance.
+bcdedit /set allowedinmemorysettings 0x0 | Out-Null
+bcdedit /set isolatedcontext No | Out-Null
+# Speed boot time a bit
+bcdedit /set quietboot yes | Out-Null
+bcdedit /timeout 0 | Out-Null # 3
+bcdedit /set {globalsettings} custom:16000067 true | Out-Null
+# Avoid the use of uncontiguous portions of low-memory from the OS. Boosts memory performance and improves microstuttering at least 80% of the cases. Also fixes the command buffer stutter after disabling 5-level paging on 10th gen Intel. Causes system freeze on unstable memory sticks.
+bcdedit /set firstmegabytepolicy UseAll | Out-Null
+bcdedit /set avoidlowmemory 0x8000000 | Out-Null
+bcdedit /set nolowmem Yes | Out-Null
+# Enable X2Apic and enable Memory Mapping for PCI-E devices.
+bcdedit /set x2apicpolicy Enable | Out-Null
+bcdedit /set configaccesspolicy Default | Out-Null
+bcdedit /set usefirmwarepcisettings No | Out-Null
+# Disable Early Launch Anti-Malware Protection
+bcdedit /set disableelamdrivers Yes | Out-Null
+# forces Windows to use logical destination mode for interrupts	
+bcdedit /set usephysicaldestination No | Out-Null
+# disable legacy APIC
+bcdedit /set uselegacyapicmode no | Out-Null 
+
+# NETWORK
+# Gaming OS Tweaker - network [ VERY SLOW ]
+Get-FileFromWeb "https://github.com/sherifmagdy32/gaming_os_tweaker/raw/refs/heads/main/scripts/tweaks/network.cmd" "$env:TEMP\network.cmd"
+& "$env:TEMP\network.cmd"
+# HakanFly - WINDOWS-NETWORK-OPTIMIZATIONS
+Invoke-RestMethod "https://github.com/HakanFly/WINDOWS-NETWORK-OPTIMIZATIONS/raw/refs/heads/main/W10ANDW11-NETWORK-TCP-DESUBOPTIMIZATION.ps1" | Invoke-Expression *> $null
+# set dns to google public dns
+$adapters = Get-NetAdapter -Physical | Where-Object Status -eq "Up"
+foreach ($a in $adapters) {Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses "8.8.8.8","8.8.4.4" -ErrorAction SilentlyContinue *> $null}
+
+# PERSONALIZATION
+# Download blanc.ico into C:\Windows
+Get-FileFromWeb "https://github.com/benzaria/remove_shortcut_arrow/raw/refs/heads/main/blanc.ico" "C:\\Windows\\blanc.ico"
+# Remove shortcut arrow overlay icon
+if (-not (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Icons")) {New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Icons" -Force | Out-Null}
+# Set the shortcut arrow overlay to a blank icon
+New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Icons" -Name "29" -PropertyType String -Value "C:\Windows\blanc.ico" -Force | Out-Null
+
 				Clear-Host
 				Write-Host "Restart to apply . . ."
 				$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")

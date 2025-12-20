@@ -15,4 +15,4 @@ where pwsh.exe>nul 2>&1 && set "PS1=pwsh" || set "PS1=powershell"
 goto :eof
 : end batch / begin powershell #>
 
-Invoke-RestMethod "https://github.com/FR33THYFR33THY/Ultimate-Windows-Optimization-Guide/raw/refs/heads/main/6%20Windows/10%20Timer%20Resolution.ps1" | Invoke-Expression
+Invoke-RestMethod "https://github.com/FR33THYFR33THY/Ultimate-Windows-Optimization-Guide/raw/refs/heads/main/1%20Check/1%20Space%20Check.ps1" | Invoke-Expression

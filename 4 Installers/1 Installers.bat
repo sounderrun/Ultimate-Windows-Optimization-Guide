@@ -1,59 +1,63 @@
-<# : batch portion
-@echo off
-fltmc >nul || (powershell "Start -Verb RunAs '%~f0'" & exit) & cd /D "%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "[scriptblock]::Create((Get-Content -LiteralPath '%~f0' -Raw -Encoding UTF8)).Invoke(@(&{$args}%*))"
-: end batch / begin powershell #>
-
-$Host.UI.RawUI.WindowTitle = $myInvocation.MyCommand.Definition + " (Administrator)"
-$Host.UI.RawUI.BackgroundColor = "Black"
-$Host.PrivateData.ProgressBackgroundColor = "Black"
-$Host.PrivateData.ProgressForegroundColor = "White"
-Clear-Host
-
-$ProgressPreference = 'SilentlyContinue'  
-$ErrorActionPreference = 'SilentlyContinue'
-
-function Get-FileFromWeb {
-
+	<# : batch portion
+	@setlocal DisableDelayedExpansion
+	@echo off
+	Color 0F
+	echo "%*"|find /i "-el" >nul && set _elev=1
+	set arg="""%~f0""" -el
+	setlocal EnableDelayedExpansion
+	>nul 2>&1 fltmc || >nul 2>&1 net session || (
+	    if not defined _elev (
+			powershell -nop -c "saps cmd.exe '/c', '!arg!' -Verb RunAs" >nul 2>&1 && exit /b 0
+		)
+		echo.
+		echo This script require administrator privileges.
+		echo To do so, right click on this script and select 'Run as administrator'.
+		pause
+	    exit 1
+	)
+	where pwsh.exe >nul 2>&1 && set "ps1=pwsh" || set "ps1=powershell"
+	%ps1% -nop -ep Bypass -c "Get-Content '%~f0' -Raw | iex"
+	goto :eof
+	: end batch / begin powershell #>
+	
+	$Host.UI.RawUI.WindowTitle = 'Installers (Administrator)'
+	$ProgressPreference = 'SilentlyContinue'
+	
+    function Get-FileFromWeb {
     param ([Parameter(Mandatory)][string]$URL, [Parameter(Mandatory)][string]$File)
-	
     function Show-Progress {
-		param ([Parameter(Mandatory)][Single]$TotalValue, [Parameter(Mandatory)][Single]$CurrentValue, [Parameter(Mandatory)][string]$ProgressText, [Parameter()][int]$BarSize = 10, [Parameter()][switch]$Complete)
-		$percent = $CurrentValue / $TotalValue
-		$percentComplete = $percent * 100
-		if ($psISE) { Write-Progress "$ProgressText" -id 0 -percentComplete $percentComplete }
-		else { Write-Host -NoNewLine "`r$ProgressText $(''.PadRight($BarSize * $percent, [char]9608).PadRight($BarSize, [char]9617)) $($percentComplete.ToString('##0.00').PadLeft(6)) % " }
+    param ([Parameter(Mandatory)][Single]$TotalValue, [Parameter(Mandatory)][Single]$CurrentValue, [Parameter(Mandatory)][string]$ProgressText, [Parameter()][int]$BarSize = 10, [Parameter()][switch]$Complete)
+    $percent = $CurrentValue / $TotalValue
+    $percentComplete = $percent * 100
+    if ($psISE) { Write-Progress "$ProgressText" -id 0 -percentComplete $percentComplete }
+    else { Write-Host -NoNewLine "`r$ProgressText $(''.PadRight($BarSize * $percent, [char]9608).PadRight($BarSize, [char]9617)) $($percentComplete.ToString('##0.00').PadLeft(6)) % " }
     }
-	
     try {
-		$request = [System.Net.HttpWebRequest]::Create($URL)
-		$response = $request.GetResponse()
-		if ($response.StatusCode -eq 401 -or $response.StatusCode -eq 403 -or $response.StatusCode -eq 404) { throw "Remote file either doesn't exist, is unauthorized, or is forbidden for '$URL'." }
-		if ($File -match '^\.\\') { $File = Join-Path (Get-Location -PSProvider 'FileSystem') ($File -Split '^\.')[1] }
-		if ($File -and !(Split-Path $File)) { $File = Join-Path (Get-Location -PSProvider 'FileSystem') $File }
-		if ($File) { $fileDirectory = $([System.IO.Path]::GetDirectoryName($File)); if (!(Test-Path($fileDirectory))) { [System.IO.Directory]::CreateDirectory($fileDirectory) | Out-Null } }
-		[long]$fullSize = $response.ContentLength
-		[byte[]]$buffer = new-object byte[] 1048576
-		[long]$total = [long]$count = 0
-		$reader = $response.GetResponseStream()
-		$writer = new-object System.IO.FileStream $File, 'Create'
-		do {
-			$count = $reader.Read($buffer, 0, $buffer.Length)
-			$writer.Write($buffer, 0, $count)
-			$total += $count
-			if ($fullSize -gt 0) { Show-Progress -TotalValue $fullSize -CurrentValue $total -ProgressText " $($File.Name)" }
-		} while ($count -gt 0)
+    $request = [System.Net.HttpWebRequest]::Create($URL)
+    $response = $request.GetResponse()
+    if ($response.StatusCode -eq 401 -or $response.StatusCode -eq 403 -or $response.StatusCode -eq 404) { throw "Remote file either doesn't exist, is unauthorized, or is forbidden for '$URL'." }
+    if ($File -match '^\.\\') { $File = Join-Path (Get-Location -PSProvider 'FileSystem') ($File -Split '^\.')[1] }
+    if ($File -and !(Split-Path $File)) { $File = Join-Path (Get-Location -PSProvider 'FileSystem') $File }
+    if ($File) { $fileDirectory = $([System.IO.Path]::GetDirectoryName($File)); if (!(Test-Path($fileDirectory))) { [System.IO.Directory]::CreateDirectory($fileDirectory) | Out-Null } }
+    [long]$fullSize = $response.ContentLength
+    [byte[]]$buffer = new-object byte[] 1048576
+    [long]$total = [long]$count = 0
+    $reader = $response.GetResponseStream()
+    $writer = new-object System.IO.FileStream $File, 'Create'
+    do {
+    $count = $reader.Read($buffer, 0, $buffer.Length)
+    $writer.Write($buffer, 0, $count)
+    $total += $count
+    if ($fullSize -gt 0) { Show-Progress -TotalValue $fullSize -CurrentValue $total -ProgressText " $($File.Name)" }
+    } while ($count -gt 0)
     }
-	
     finally {
-		$reader.Close()
-		$writer.Close()
+    $reader.Close()
+    $writer.Close()
+    }
     }
 	
-}
-
-function show-menu {
+	function show-menu {
 	Clear-Host
 	Write-Host "Game launchers, programs and web browsers:"
     Write-Host "-Disable hardware acceleration"
@@ -78,65 +82,45 @@ function show-menu {
     Write-Host "12. OBS Studio		29. Winget"
 	Write-Host "13. Roblox		30. .NET Freamework 3.5"
     Write-Host "14. Rockstar Games	31. Edge WebView2"
-    Write-Host "15. Steam"
-    Write-Host "16. Ubisoft Connect"
-    Write-Host "17. Valorant"
-}
+    Write-Host "15. Steam		32. Firefox"
+    Write-Host "16. Ubisoft Connect	33. Thorium AVX2"
+    Write-Host "17. Valorant		34. Mullvad Browser"
+	}
 
 while ($true) {
-
     show-menu
     $choices = Read-Host " "
-
     if ($choices -match '^\d+(,\d+)*$') {
         foreach ($choice in $choices.Split(',')) {
             switch ($choice) {
 				1 {
-
 					Clear-Host
 					exit
-
 				}
 				2 {
-
 					Clear-Host
-					Write-Host "Installing: 7Zip . . ."
-					$exe = Join-Path $env:TEMP '7z-x64.exe'
-			    
-					# Download latest 7-Zip x64 release from GitHub
-					$url = (Invoke-RestMethod "https://api.github.com/repos/ip7z/7zip/releases/latest").assets |
-						Where-Object { $_.name -like "*x64.exe" } |
-						Select-Object -First 1 -ExpandProperty browser_download_url
-					Get-FileFromWeb $url -File $exe
-			    
-					# Silent install
-					Start-Process -FilePath $exe -ArgumentList '/S' -Wait
-			    
-					# 7-Zip file associations
-					Write-Output "Configuring 7-Zip file associations..."
-					$7zExe = Join-Path $env:ProgramFiles '7-Zip\7zFM.exe'
-					if (Test-Path $7zExe) {
-						$exts = '7z','xz','bzip2','gzip','tar','zip','wim','apfs','ar','arj','cab','chm','cpio','cramfs','dmg','ext','fat','gpt','hfs','ihex',
-				        'lzh','lzma','mbr','nsis','ntfs','qcow2','rar','rpm','squashfs','udf','uefi','vdi','vhd','vhdx','vmdk','xar','z' # ,'msi'
-			    
-						foreach ($ext in $exts) {
-							cmd /c "assoc .$ext=7zFM.exe" > $null
-						}
-			    
-						cmd /c "ftype 7zFM.exe=`"$7zExe`" `"%1`" `"%*`"" > $null
-					}
-
-					show-menu
-
+					Write-Host 'Installing: 7Zip . . .'
+					$a=(irm https://api.github.com/repos/ip7z/7zip/releases/latest).assets|? name -like '*x64.exe'|select -f 1;$exe=Join-Path $env:TEMP $a.name
+					Get-FileFromWeb $a.browser_download_url -File $exe;saps $exe '/S' -Wait;$fm="$env:ProgramFiles\7-Zip\7zFM.exe";if(Test-Path $fm){
+					  '7z','xz','bzip2','gzip','tar','zip','wim','apfs','ar','arj','cab','chm','cpio','cramfs','dmg','ext','fat','gpt','hfs','ihex','lzh','lzma','mbr','nsis','ntfs','qcow2',
+					  'rar','rpm','squashfs','udf','uefi','vdi','vhd','vhdx','vmdk','xar','z' | % {cmd /c "assoc .$_=7zFM.exe" >$null};cmd /c "ftype 7zFM.exe=`"$fm`" `"%1`" `"%*`"" >$null
+					}; $p="$env:ProgramData\Microsoft\Windows\Start Menu\Programs"; mv "$p\7-Zip\7-Zip File Manager.lnk" $p -Force -ea 0; ren "$p\7-Zip File Manager.lnk" '7-Zip.lnk' -Force -ea 0; ri "$p\7-Zip" -Recurse -Force -ea 0
+					show-menu					
 				}
 				3 {
 
 Clear-Host
 Write-Host "Installing: Battle.net . . ."
 # download battle.net
-Get-FileFromWeb -URL "https://downloader.battle.net/download/getInstaller?os=win&installer=Battle.net-Setup.exe" -File "$env:TEMP\Battle.net.exe"
-# install battle.net 
-Start-Process "$env:TEMP\Battle.net.exe" -ArgumentList '--lang=enUS --installpath="C:\Program Files (x86)\Battle.net"'
+Get-FileFromWeb "https://downloader.battle.net/download/getInstaller?os=win&installer=Battle.net-Setup.exe" "$env:TEMP\Battle.net-Setup.exe"
+# install battle.net
+saps "$env:TEMP\Battle.net-Setup.exe" -ArgumentList '--lang=enUS --installpath="C:\Program Files (x86)\Battle.net"'
+#
+$p="$env:ProgramData\Microsoft\Windows\Start Menu\Programs"
+while(!(Test-Path "$p\Battle.net\Battle.net.lnk")){sleep 1}
+mv "$p\Battle.net\Battle.net.lnk" $p -Force -ea 0
+ri "$p\Battle.net" -Recurse -Force -ea 0
+
 # create battle.net shortcut
 $WshShell = New-Object -comObject WScript.Shell
 $Shortcut = $WshShell.CreateShortcut("$Home\Desktop\Battle.net.lnk")
@@ -525,10 +509,37 @@ show-menu
 
 					Clear-Host
 					Write-Host "Installing: NanaZip . . ."
+<#
+    Write-Host 'Installing: NanaZip . . .'
+    $path = New-Item "$tempDir\nanazip" -ItemType Directory
+    $assets | ForEach-Object {
+        $filename = $_ -split '/' | Select-Object -Last 1
+        Write-Output "Downloading '$filename'..."
+        & curl.exe -LSs $_ -o "$path\$filename" $timeouts
+    try {
+        $appxArgs = @{
+            "PackagePath" = (Get-ChildItem $path -Filter "*.msixbundle" | Select-Object -First 1).FullName
+            "LicensePath" = (Get-ChildItem $path -Filter "*.xml" | Select-Object -First 1).FullName
+        }
+        Add-AppxProvisionedPackage -Online @appxArgs | Out-Null
+
+        Write-Output "Installed NanaZip!"
+    }
+    catch {
+        Write-Error "Failed to install NanaZip! Getting 7-Zip instead. $_"
+        Install7Zip
+    }
+}
+
+elseif ($assets.Count -eq 2) {
+$7zipRegistry = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\7-Zip"
+
+				
+					
 					Get-FileFromWeb -Url "https://github.com/M2Team/NanaZip/releases/download/5.0.1263.0/NanaZip_5.0.1263.0.msixbundle" -File "$env:TEMP\NanaZip_5.0.1263.0.msixbundle"
 					PowerShell -NoLogo -NoProfile -NonInteractive -InputFormat None -ExecutionPolicy Bypass Add-AppxPackage -DeferRegistrationWhenPackagesAreInUse -ForceUpdateFromAnyVersion -Path "$env:TEMP\NanaZip_5.0.1263.0.msixbundle"
 					show-menu
-				
+#>				
 				}
             }
         }

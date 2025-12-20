@@ -1,23 +1,27 @@
 <# : batch portion
+@setlocal DisableDelayedExpansion
 @echo off
-fltmc >nul || (powershell "Start -Verb RunAs '%~f0'" & exit) & cd /D "%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "[scriptblock]::Create((Get-Content -LiteralPath '%~f0' -Raw -Encoding UTF8)).Invoke(@(&{$args}%*))"
+Color 0F
+echo "%*"|find /i "-el" >nul && set _elev=1
+set arg="""%~f0""" -el
+setlocal EnableDelayedExpansion
+>nul 2>&1 fltmc || >nul 2>&1 net session || (
+    if not defined _elev (
+		powershell -nop -c "saps cmd.exe '/c', '!arg!' -Verb RunAs" >nul 2>&1 && exit /b 0
+	)
+	echo.
+	echo This script require administrator privileges.
+	echo To do so, right click on this script and select 'Run as administrator'.
+	pause
+    exit 1
+)
+where pwsh.exe >nul 2>&1 && set "ps1=pwsh" || set "ps1=powershell"
+%ps1% -nop -ep Bypass -c "Get-Content '%~f0' -Raw | iex"
+goto :eof
 : end batch / begin powershell #>
 
-# Download the script to temp
-$scriptPath = Join-Path $env:TEMP 'run-spotx.ps1'    
-Invoke-WebRequest -UseBasicParsing -Uri 'https://spotx-official.github.io/run.ps1' -OutFile $scriptPath    
+$Host.UI.RawUI.WindowTitle = 'Spotify (Administrator)'
+$progresspreference = 'silentlycontinue'
 
-# Execute the downloaded script with parameters    
-& $scriptPath `    
-    -m `    
-    -sp-over `    
-    -new_theme `    
-    -canvashome_off `    
-    -adsections_off `    
-    -podcasts_off `    
-    -block_update_on `    
-    -DisableStartup `    
-    -cl 500 `    
-    -no_shortcut    
+$ps1 = Join-Path $env:TEMP 'run.ps1'; curl.exe -sSL -o $ps1 'https://spotx-official.github.io/run.ps1'
+& $ps1 -m -sp-over -new_theme -canvashome_off -adsections_off -podcasts_off -block_update_on -DisableStartup -cl 500 -no_shortcut
