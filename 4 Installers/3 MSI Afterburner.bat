@@ -22,3 +22,6 @@ goto :eof
 
 $Host.UI.RawUI.WindowTitle = 'MSI Afterburner (Administrator)'
 (irm https://github.com/FR33THYFR33THY/Ultimate-Windows-Optimization-Guide/raw/refs/heads/main/4%20Installers/3%20MSI%20Afterburner.ps1) -replace '.*WindowTitle.*', '' | iex
+# fix shortcuts
+$p="$env:APPDATA\Microsoft\Windows\Start Menu\Programs"; mv "$p\MSI Afterburner\MSI Afterburner.lnk" $p -Force -ea 0; ri "$p\MSI Afterburner" -Recurse -Force -ea 0
+mv "$p\RivaTuner Statistics Server\RivaTuner Statistics Server.lnk" $p -Force -ea 0; ri "$p\RivaTuner Statistics Server" -Recurse -Force -ea 0

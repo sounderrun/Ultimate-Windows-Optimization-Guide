@@ -1,68 +1,104 @@
 <# : batch portion
+@setlocal DisableDelayedExpansion
 @echo off
-fltmc >nul || (powershell "Start -Verb RunAs '%~f0'" & exit) & cd /D "%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "[scriptblock]::Create((Get-Content -LiteralPath '%~f0' -Raw -Encoding UTF8)).Invoke(@(&{$args}%*))"
+Color 0F
+echo "%*"|find /i "-el" >nul && set _elev=1
+set arg="""%~f0""" -el
+setlocal EnableDelayedExpansion
+>nul 2>&1 fltmc || >nul 2>&1 net session || (
+    if not defined _elev (
+		powershell -nop -c "saps cmd.exe '/c', '!arg!' -Verb RunAs" >nul 2>&1 && exit /b 0
+	)
+	echo.
+	echo This script require administrator privileges.
+	echo To do so, right click on this script and select 'Run as administrator'.
+	pause
+    exit 1
+)
+where pwsh.exe >nul 2>&1 && set "ps1=pwsh" || set "ps1=powershell"
+%ps1% -nop -ep Bypass -c "Get-Content '%~f0' -Raw | iex"
+goto :eof
 : end batch / begin powershell #>
 
-$Host.UI.RawUI.WindowTitle = $myInvocation.MyCommand.Definition + " (Administrator)"
-$Host.UI.RawUI.BackgroundColor = "Black"
-$Host.PrivateData.ProgressBackgroundColor = "Black"
-$Host.PrivateData.ProgressForegroundColor = "White"
-Clear-Host
+$Host.UI.RawUI.WindowTitle = 'Direct X (Administrator)'
 
-function Get-FileFromWeb {
-
-    param ([Parameter(Mandatory)][string]$URL, [Parameter(Mandatory)][string]$File)
-	
-    function Show-Progress {
-		param ([Parameter(Mandatory)][Single]$TotalValue, [Parameter(Mandatory)][Single]$CurrentValue, [Parameter(Mandatory)][string]$ProgressText, [Parameter()][int]$BarSize = 10, [Parameter()][switch]$Complete)
-		$percent = $CurrentValue / $TotalValue
-		$percentComplete = $percent * 100
-		if ($psISE) { Write-Progress "$ProgressText" -id 0 -percentComplete $percentComplete }
-		else { Write-Host -NoNewLine "`r$ProgressText $(''.PadRight($BarSize * $percent, [char]9608).PadRight($BarSize, [char]9617)) $($percentComplete.ToString('##0.00').PadLeft(6)) % " }
-    }
-	
-    try {
-		$request = [System.Net.HttpWebRequest]::Create($URL)
-		$response = $request.GetResponse()
-		if ($response.StatusCode -eq 401 -or $response.StatusCode -eq 403 -or $response.StatusCode -eq 404) { throw "Remote file either doesn't exist, is unauthorized, or is forbidden for '$URL'." }
-		if ($File -match '^\.\\') { $File = Join-Path (Get-Location -PSProvider 'FileSystem') ($File -Split '^\.')[1] }
-		if ($File -and !(Split-Path $File)) { $File = Join-Path (Get-Location -PSProvider 'FileSystem') $File }
-		if ($File) { $fileDirectory = $([System.IO.Path]::GetDirectoryName($File)); if (!(Test-Path($fileDirectory))) { [System.IO.Directory]::CreateDirectory($fileDirectory) | Out-Null } }
-		[long]$fullSize = $response.ContentLength
-		[byte[]]$buffer = new-object byte[] 1048576
-		[long]$total = [long]$count = 0
-		$reader = $response.GetResponseStream()
-		$writer = new-object System.IO.FileStream $File, 'Create'
-		do {
-			$count = $reader.Read($buffer, 0, $buffer.Length)
-			$writer.Write($buffer, 0, $count)
-			$total += $count
-			if ($fullSize -gt 0) { Show-Progress -TotalValue $fullSize -CurrentValue $total -ProgressText " $($File.Name)" }
-		} while ($count -gt 0)
-    }
-	
-    finally {
-		$reader.Close()
-		$writer.Close()
-    }
-	
-}
+function Get-FileFromWeb {	
+param([string]$URL,[string]$File)	
+function Show-Progress {	
+param([single]$T,[single]$C,[int]$B=10)	
+$p=$C/$T;$pc=$p*100	
+if($psISE){Write-Progress '' -Id 0 -PercentComplete $pc}	
+else{Write-Host -NoNewLine "`r  $(''.PadRight($B*$p,9608).PadRight($B,9617))  $($pc.ToString('##0.00').PadLeft(6)) % "}	
+}	
+[Net.ServicePointManager]::SecurityProtocol='Tls12,Tls13'	
+Add-Type -A System.Net.Http -ea 0; $c=[Net.Http.HttpClient]::new()	
+if($File -like '.\*'){$File=Join-Path (pwd) $File.Substring(2)}	
+if($File -and !(Split-Path $File)){$File=Join-Path (pwd) $File}	
+$d=[IO.Path]::GetDirectoryName($File);if($d -and !(Test-Path $d)){[IO.Directory]::CreateDirectory($d)|out-null}	
+try{	
+$r=$c.GetAsync($URL,[Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()	
+$r.EnsureSuccessStatusCode()|out-null	
+$s=$r.Content.ReadAsStreamAsync().GetAwaiter().GetResult()	
+$len=[long]$r.Content.Headers.ContentLength	
+$buf=[byte[]]::new(1mb)	
+$fs=[IO.File]::Create($File)	
+$t=0	
+while(($n=$s.Read($buf,0,$buf.Length)) -gt 0){	
+$fs.Write($buf,0,$n);$t+=$n	
+if($len -gt 0){Show-Progress $len $t}	
+}	
+if($len -gt 0){Show-Progress $len $len}	
+}finally{	
+if($fs){$fs.Close()}	
+if($s){$s.Close()}	
+$c.Dispose()	
+}	
+}	
 
 Write-Host "Installing: Direct X . . ."
-Remove-Item "$env:TEMP\DirectX","$env:SystemRoot\Temp\DirectX" -Recurse -Force
-Get-FileFromWeb -URL "https://download.microsoft.com/download/8/4/A/84A35BF1-DAFE-4AE8-82AF-AD2AE20B6B14/directx_Jun2010_redist.exe" -File "$env:TEMP\DirectX.exe"
-Start-Process "$env:TEMP\DirectX.exe" -ArgumentList "/Q /T:`"$env:TEMP\DirectX`"" -Wait
-Start-Process "$env:TEMP\DirectX\DXSETUP.exe" -ArgumentList "/silent" -Wait	
+# download & install direct x
+ri "$env:TEMP\directx" -recurse -force -ea 0
+Get-FileFromWeb "https://download.microsoft.com/download/8/4/A/84A35BF1-DAFE-4AE8-82AF-AD2AE20B6B14/directx_Jun2010_redist.exe" "$env:TEMP\DirectX.exe"
+saps "$env:TEMP\DirectX.exe" -WindowStyle Hidden "/q /c /t:`"$env:TEMP\directx`"" -wait
+saps "$env:TEMP\directx\DXSETUP.exe" -WindowStyle Hidden "/silent" -wait
 
-# D3D11 - D3D12 Tweaks
-iwr -Uri "https://github.com/HakanFly/Windows-Tweaks/raw/refs/heads/main/DirectX%20Tweaks/D3D11%20-%20D3D12%20Tweaks.reg" -OutFile "$env:TEMP\D3D11 - D3D12 Tweaks.reg"
+# create reg file
+$MultilineComment = @'
+Windows Registry Editor Version 5.00
+
+; D3D11 - D3D12 Tweaks
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\DirectX]
+"D3D12_ENABLE_UNSAFE_COMMAND_BUFFER_REUSE"=dword:00000001
+"D3D12_ENABLE_RUNTIME_DRIVER_OPTIMIZATIONS"=dword:00000001
+"D3D12_RESOURCE_ALIGNMENT"=dword:00000001
+"D3D11_MULTITHREADED"=dword:00000001
+"D3D12_MULTITHREADED"=dword:00000001
+"D3D11_DEFERRED_CONTEXTS"=dword:00000001
+"D3D12_DEFERRED_CONTEXTS"=dword:00000001
+"D3D11_ALLOW_TILING"=dword:00000001
+"D3D11_ENABLE_DYNAMIC_CODEGEN"=dword:00000001
+"D3D12_ALLOW_TILING"=dword:00000001
+"D3D12_CPU_PAGE_TABLE_ENABLED"=dword:00000001
+"D3D12_HEAP_SERIALIZATION_ENABLED"=dword:00000001
+"D3D12_MAP_HEAP_ALLOCATIONS"=dword:00000001
+"D3D12_RESIDENCY_MANAGEMENT_ENABLED"=dword:00000001
+
+; DirectX Driver DXGKrnl Advanced Tweaks (2)
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DXGKrnl]
+"CreateGdiPrimaryOnSlaveGPU"=dword:00000001
+"DriverSupportsCddDwmInterop"=dword:00000001
+"DxgkCddSyncDxAccess"=dword:00000001
+"DxgkCddSyncGPUAccess"=dword:00000001
+"DxgkCddWaitForVerticalBlankEvent"=dword:00000001
+"DxgkCreateSwapChain"=dword:00000001
+"DxgkFreeGpuVirtualAddress"=dword:00000001
+"DxgkOpenSwapChain"=dword:00000001
+"DxgkShareSwapChainObject"=dword:00000001
+"DxgkWaitForVerticalBlankEvent"=dword:00000001
+"DxgkWaitForVerticalBlankEvent2"=dword:00000001
+"SwapChainBackBuffer"=dword:00000001
+"TdrResetFromTimeoutAsync"=dword:00000001
+'@
+set-content "$env:TEMP\chrome.reg" -value $MultilineComment -force
 # import reg file
-Regedit.exe /S "$env:TEMP\D3D11 - D3D12 Tweaks.reg"
-Timeout /T 1 | Out-Null
-# DirectX Driver DXGKrnl Advanced Tweaks (2)
-Invoke-WebRequest -Uri "https://github.com/HakanFly/Windows-Tweaks/raw/refs/heads/main/DirectX%20Tweaks/DirectX%20Driver%20DXGKrnl%20Advanced%20Tweaks%20(2).reg" -OutFile "$env:TEMP\DirectX Driver DXGKrnl Advanced Tweaks (2).reg"
-# import reg file
-Regedit.exe /S "$env:TEMP\DirectX Driver DXGKrnl Advanced Tweaks (2).reg"
-Timeout /T 1 | Out-Null
+reg import "$env:TEMP\chrome.reg" 2> $null

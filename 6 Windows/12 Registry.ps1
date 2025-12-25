@@ -1,26 +1,31 @@
-<# : batch portion
-@echo off
-setlocal DisableDelayedExpansion
-echo "%*"|find /i "-el">nul && set _elev=1
-set _PSarg="""%~f0""" -el
-setlocal EnableDelayedExpansion
->nul 2>&1 fltmc || >nul 2>&1 net session || (
-    if not defined _elev (
-        powershell -NoProfile -Command "Start-Process cmd.exe -ArgumentList '/c', '!_PSarg!' -Verb RunAs" && exit /b 0
-        exit /b 1
-    )
-)
-where pwsh.exe>nul 2>&1 && set "PS1=pwsh" || set "PS1=powershell"
-%PS1% -nop -c "Get-Content '%~f0' -Raw | iex"
-goto :eof
-: end batch / begin powershell #>
-
-$Host.UI.RawUI.WindowTitle = $myInvocation.MyCommand.Definition + " (Administrator)"
-$Host.UI.RawUI.BackgroundColor = "Black"
-$Host.PrivateData.ProgressBackgroundColor = "Black"
-$Host.PrivateData.ProgressForegroundColor = "White"
-Clear-Host
-
+	<# : batch portion
+	@setlocal DisableDelayedExpansion
+	@echo off
+	Color 0F
+	echo "%*"|find /i "-el" >nul && set _elev=1
+	set arg="""%~f0""" -el
+	setlocal EnableDelayedExpansion
+	>nul 2>&1 fltmc || >nul 2>&1 net session || (
+	    if not defined _elev (
+			powershell -nop -c "saps cmd.exe '/c', '!arg!' -Verb RunAs" >nul 2>&1 && exit /b 0
+		)
+		echo.
+		echo This script require administrator privileges.
+		echo To do so, right click on this script and select 'Run as administrator'.
+		pause
+	    exit 1
+	)
+	where pwsh.exe >nul 2>&1 && set "ps1=pwsh" || set "ps1=powershell"
+	%ps1% -nop -ep Bypass -c "Get-Content '%~f0' -Raw | iex"
+	goto :eof
+	: end batch / begin powershell #>
+	
+	$Host.UI.RawUI.WindowTitle = $myInvocation.MyCommand.Definition + " (Administrator)"
+	$Host.UI.RawUI.BackgroundColor = "Black"
+	$Host.PrivateData.ProgressBackgroundColor = "Black"
+	$Host.PrivateData.ProgressForegroundColor = "White"
+	Clear-Host
+	
     function RunAsTI($cmd, $arg) {
     $id = 'RunAsTI'; $key = "Registry::HKU\$(((whoami /user)-split' ')[-1])\Volatile Environment"; $code = @'
     $I=[int32]; $M=$I.module.gettype("System.Runtime.Interop`Services.Mar`shal"); $P=$I.module.gettype("System.Int`Ptr"); $S=[string]

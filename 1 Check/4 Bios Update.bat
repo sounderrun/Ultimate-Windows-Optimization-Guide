@@ -20,5 +20,7 @@ where pwsh.exe >nul 2>&1 && set "ps1=pwsh" || set "ps1=powershell"
 goto :eof
 : end batch / begin powershell #>
 
-$Host.UI.RawUI.WindowTitle = 'Timer Resolution (Administrator)'
-(irm https://github.com/FR33THYFR33THY/Ultimate-Windows-Optimization-Guide/raw/refs/heads/main/6%20Windows/10%20Timer%20Resolution.ps1) -replace '.*WindowTitle.*', '' | iex
+# get motherboard id
+$instanceID = (wmic baseboard get product)
+# search motherboard id in web browser
+Start-Process "https://search.brave.com//search?q=$instanceID"

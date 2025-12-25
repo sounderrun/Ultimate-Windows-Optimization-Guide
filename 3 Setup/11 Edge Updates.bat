@@ -305,13 +305,10 @@ Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\Software\Wow6432Node\Policies\Microsoft\MicrosoftEdge\PhishingFilter]
 "EnabledV9"=dword:00000000
-'@; sc -Path "$env:TEMP\Edge.reg" -Value $MultilineComment -Force -Encoding ASCII;reg import "$env:TEMP\Edge.reg" *>$null
+'@; Set-Content -Path "$env:TEMP\Edge.reg" -Value $MultilineComment -Force -Encoding ASCII; reg import "$env:TEMP\Edge.reg" *>$null
 # disable edge scheduled tasks
 Get-ScheduledTask | ? { $_.TaskName -like "*Edge*" } | % { Disable-ScheduledTask -TaskName $_.TaskName | Out-Null }
 # disable startup
-Get-CimInstance Win32_StartupCommand | ? {$_.Name -like "*edge*"} | 
-% {si -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run" -Name $_.Name -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -ea 0}
-# cleanup
-gci -Path "C:\Windows\Temp" *.* -Recurse | ri -Force -Recurse -ea 0; gci -Path $env:TEMP *.* -Recurse | ri -Force -Recurse -ea 0
+Get-CimInstance Win32_StartupCommand | ? {$_.Name -like "*edge*"} | % {sp -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run" -Name $_.Name -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -ea 0}
 # open web browser
-saps "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+saps "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
