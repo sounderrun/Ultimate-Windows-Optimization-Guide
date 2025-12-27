@@ -861,7 +861,7 @@ $lnk.Save(); $lnk = $null
 					# download & install ubisoft connect
 					$exe="$env:TEMP\Ubisoft Connect.exe"; Get-FileFromWeb "https://static3.cdn.ubi.com/orbit/launcher_installer/UbisoftConnectInstaller.exe" $exe; saps -wait $exe "/S"
 					# debloat start menu shortcut
-					$p="$env:ProgramData\Microsoft\Windows\Start Menu\Programs"; mv "$p\Ubisoft\Ubisoft Connect\Ubisoft Connect.lnk" $p -Force -ea 0; ri "$p\Ubisoft" -Recurse -Force -ea 0
+					$p="$env:APPDATA\Microsoft\Windows\Start Menu\Programs"; mv "$p\Ubisoft\Ubisoft Connect\Ubisoft Connect.lnk" $p -Force -ea 0; ri "$p\Ubisoft" -Recurse -Force -ea 0
 					show-menu
 					
 				}
@@ -1209,8 +1209,8 @@ Windows Registry Editor Version 5.00
 					cls; Write-Host "Installing Core Temp . . ."
 					# download & install core temp
 					$exe = "$env:TEMP\CoreTempSetup.exe"; Get-FileFromWeb "https://www.alcpu.com/CoreTemp/Core-Temp-setup.exe" $exe; saps -wait $exe '/verysilent'
-					$p="$env:ProgramData\Microsoft\Windows\Start Menu\Programs"; mv "$p\Core Temp\Core Temp.lnk" $p -Force -ea 0; ri "$p\Core Temp" -Recurse -Force -ea 0; ri "$env:PUBLIC\Desktop\Goodgame Empire.url" -Force -ea 0
-					# 
+					$p="$env:ProgramData\Microsoft\Windows\Start Menu\Programs"; mv "$p\Core Temp\Core Temp.lnk" $p -Force -ea 0; ri "$p\Core Temp" -Recurse -Force -ea 0; ri "$env:USERPROFILE\Desktop\Goodgame Empire.url" -Force -ea 0
+					# enable logging on startup
 					reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "Core Temp" /t REG_SZ /d "C:\Program Files\Core Temp\Core Temp.exe /STARTMINIMIZED" /f >$null 2>&1
 					# create reg file
 					$MultilineComment = @'
@@ -1656,7 +1656,7 @@ Windows Registry Editor Version 5.00
 					cls; Write-Host "Installing: VLC media player . . ."
 					# download & install vlc media player
 					$exe = Join-Path $env:TEMP 'vlc-win64.exe'; Get-FileFromWeb 'https://get.videolan.org/vlc/3.0.21/win64/vlc-3.0.21-win64.exe' $exe; saps $exe '/S' -Wait
-					$p="$env:ProgramData\Microsoft\Windows\Start Menu\Programs"; mv "$p\Videolan\VLC media player.lnk" $p -Force -ea 0; ri "$p\Videolan" -Recurse -Force -ea 0
+					$p="$env:ProgramData\Microsoft\Windows\Start Menu\Programs"; mv "$p\VideoLAN\VLC media player.lnk" $p -Force -ea 0; ri "$p\VideoLAN" -Recurse -Force -ea 0
 					show-menu
 					
 				}
@@ -2511,7 +2511,10 @@ exit /b 0
 				38 {
 					
 					cls;write-host 'Installing: Process Lasso . . .'
-					$exe="$env:TEMP\processlassosetup64.exe"; Get-FileFromWeb "https://dl.bitsum.com/files/processlassosetup64.exe" $exe; saps $exe '/S' -Wait
+					$exe="$env:TEMP\processlassosetup64.exe"; Get-FileFromWeb "https://dl.bitsum.com/files/processlassosetup64.exe" $exe; saps $exe '/S'
+					$p="$env:ProgramData\Microsoft\Windows\Start Menu\Programs"; while (-not (Test-Path "$p\Process Lasso")) { sleep 1 }
+					mv "$p\Process Lasso\Process Lasso.lnk" $p -force -ea 0; ri "$p\Process Lasso" -recurse -force -ea 0					
+					# create ini file
 					# prolasso.ini';$destDir='C:\ProgramData\ProcessLasso\config';$destFile="$destDir\prolasso.ini";if(-not(Test-Path $destDir)){
 					# New-Item -Path $destDir -ItemType Directory -Force|Out-Null};Invoke-WebRequest -Uri $githubUrl -OutFile $destFile -ErrorAction Stop
 					show-menu				
