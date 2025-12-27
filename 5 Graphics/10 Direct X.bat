@@ -55,16 +55,110 @@ $c.Dispose()
 }	
 }	
 
+# temp folder cleanup
+gci "C:\Windows\Temp" *.* -recurse | ri -force -recurse -ea 0
+gci $env:TEMP *.* -recurse | ri -force -recurse -ea 0
+
+$progresspreference = 'silentlycontinue'
 Write-Host "Installing: Direct X . . ."
 # download & install direct x
-ri "$env:TEMP\directx" -recurse -force -ea 0
-Get-FileFromWeb "https://download.microsoft.com/download/8/4/A/84A35BF1-DAFE-4AE8-82AF-AD2AE20B6B14/directx_Jun2010_redist.exe" "$env:TEMP\DirectX.exe"
-saps "$env:TEMP\DirectX.exe" -WindowStyle Hidden "/q /c /t:`"$env:TEMP\directx`"" -wait
-saps "$env:TEMP\directx\DXSETUP.exe" -WindowStyle Hidden "/silent" -wait
+ri "$env:TEMP\DirectX" -recurse -force -ea 0
+try {
+	Get-FileFromWeb "https://download.microsoft.com/download/8/4/A/84A35BF1-DAFE-4AE8-82AF-AD2AE20B6B14/directx_Jun2010_redist.exe" "$env:TEMP\DirectX.exe"
+	saps "$env:TEMP\DirectX.exe" -WindowStyle Hidden "/q /t:`"$env:TEMP\DirectX`"" -wait
+	saps "$env:TEMP\DirectX\DXSETUP.exe" "/silent" -wait
+} catch {
+	$exe="$env:TEMP\dxwebsetup.exe"
+	Get-FileFromWeb "https://download.microsoft.com/download/1/7/1/1718ccc4-6315-4d8e-9543-8e28a4e18c4c/dxwebsetup.exe" $exe
+	saps $exe '/Q' -wait
+}
 
+# remove "DirectX Configuration Database" capability
+Remove-WindowsCapability -Online -Name "DirectX.Configuration.Database~~~~0.0.1.0" | Out-Null
+
+# direct x tweaks
 # create reg file
 $MultilineComment = @'
 Windows Registry Editor Version 5.00
+
+; Clear DirectX recent application history
+[-HKEY_CURRENT_USER\Software\Microsoft\Direct3D\MostRecentApplication]
+
+[HKEY_CURRENT_USER\Software\Microsoft\Direct3D\MostRecentApplication]
+
+; directx
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\DirectDraw]
+"DisableAGPSupport"=dword:00000000
+"UseNonLocalVidMem"=dword:00000001
+"DisableDDSCAPSInDDSD"=dword:00000000
+"EmulationOnly"=dword:00000000
+"EmulatePointSprites"=dword:00000000
+"EmulateStateBlocks"=dword:00000000
+"DisableMMX"=dword:00000000
+"ForceNoSysLock"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\DirectDraw]
+"DisableAGPSupport"=dword:00000000
+"UseNonLocalVidMem"=dword:00000001
+"DisableDDSCAPSInDDSD"=dword:00000000
+"EmulationOnly"=dword:00000000
+"EmulatePointSprites"=dword:00000000
+"EmulateStateBlocks"=dword:00000000
+"DisableMMX"=dword:00000000
+"ForceNoSysLock"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Direct3D]
+"UseNonLocalVidMem"=dword:00000001
+"EnableDebugging"=dword:00000000
+"FullDebug"=dword:00000000
+"DisableDM"=dword:00000001
+"EnableMultimonDebugging"=dword:00000000
+"LoadDebugRuntime"=dword:00000000
+"FewVertices"=dword:00000001
+"DisableMMX"=dword:00000000
+"MMX Fast Path"=dword:00000001
+"MMXFastPath"=dword:00000001
+"UseMMXForRGB"=dword:00000001
+"DisableVidMemVBs"=dword:00000000
+"FlipNoVsync"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Direct3D]
+"UseNonLocalVidMem"=dword:00000001
+"FewVertices"=dword:00000001
+"DisableMMX"=dword:00000000
+"MMX Fast Path"=dword:00000001
+"MMXFastPath"=dword:00000001
+"UseMMXForRGB"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Direct3D\Drivers]
+"ForceRgbRasterizer"=dword:00000000
+"EnumReference"=dword:00000001
+"EnumSeparateMMX"=dword:00000001
+"EnumRamp"=dword:00000001
+"EnumNullDevice"=dword:00000001
+"UseMMXForRGB"=dword:00000001
+"SoftwareOnly"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Direct3D\Drivers]
+"ForceRgbRasterizer"=dword:00000000
+"EnumReference"=dword:00000001
+"EnumSeparateMMX"=dword:00000001
+"EnumRamp"=dword:00000001
+"EnumNullDevice"=dword:00000001
+"UseMMXForRGB"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers]
+"DpiMapIommuContiguous"=dword:00000001
+"HwSchedMode"=dword:00000002
+
+; Tweak directx driver service
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DXGKrnl]
+"MonitorLatencyTolerance"=dword:00000001
+"MonitorRefreshLatencyTolerance"=dword:00000001
+
+; disable variable refresh rate & enable optimizations for windowed games
+[HKEY_CURRENT_USER\Software\Microsoft\DirectX\UserGpuPreferences]
+"DirectXUserGlobalSettings"="SwapEffectUpgradeEnable=1;VRROptimizeEnable=0;"
 
 ; D3D11 - D3D12 Tweaks
 [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\DirectX]
@@ -99,6 +193,6 @@ Windows Registry Editor Version 5.00
 "SwapChainBackBuffer"=dword:00000001
 "TdrResetFromTimeoutAsync"=dword:00000001
 '@
-set-content "$env:TEMP\chrome.reg" -value $MultilineComment -force
+set-content "$env:TEMP\DirectX.reg" -value $MultilineComment -force
 # import reg file
-reg import "$env:TEMP\chrome.reg" 2> $null
+reg import "$env:TEMP\DirectX.reg" 2> $null

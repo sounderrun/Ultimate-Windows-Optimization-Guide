@@ -68,11 +68,11 @@
     Write-Host "Optimize your game settings to achieve this."
     Write-Host "Further tuning can be done via config files or launch options."
 	Write-Host ""
-    Write-Host " 1. Exit		18. NanaZip		35. MuMuPlayer"
-    Write-Host " 2. 7-Zip		19. Brave"
-    Write-Host " 3. Battle.net		20. Revo Uninstaller"
-	Write-Host " 4. Discord		21. CoreTemp"
-    Write-Host " 5. Electronic Arts	22. LibreWolf"
+    Write-Host " 1. Exit		18. NanaZip		35. Everything"
+    Write-Host " 2. 7-Zip		19. Brave		36. simplewall"
+    Write-Host " 3. Battle.net		20. Revo Uninstaller	37. UniGetUI"
+	Write-Host " 4. Discord		21. CoreTemp		38. Process Lasso"
+    Write-Host " 5. Electronic Arts	22. LibreWolf		39. Fan Control"
     Write-Host " 6. Epic Games		23. Office 365"
     Write-Host " 7. Escape From Tarkov	24. Portmaster"
     Write-Host " 8. GOG launcher	25. PowerShell 7"
@@ -1210,6 +1210,8 @@ Windows Registry Editor Version 5.00
 					# download & install core temp
 					$exe = "$env:TEMP\CoreTempSetup.exe"; Get-FileFromWeb "https://www.alcpu.com/CoreTemp/Core-Temp-setup.exe" $exe; saps -wait $exe '/verysilent'
 					$p="$env:ProgramData\Microsoft\Windows\Start Menu\Programs"; mv "$p\Core Temp\Core Temp.lnk" $p -Force -ea 0; ri "$p\Core Temp" -Recurse -Force -ea 0; ri "$env:PUBLIC\Desktop\Goodgame Empire.url" -Force -ea 0
+					# 
+					reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "Core Temp" /t REG_SZ /d "C:\Program Files\Core Temp\Core Temp.exe /STARTMINIMIZED" /f >$null 2>&1
 					# create reg file
 					$MultilineComment = @'
 [General]
@@ -2374,7 +2376,6 @@ gci -Path "C:\Program Files\Mozilla Firefox" -Filter "minidump*.*" -File | ri -F
 $batch = @'
 @echo off
 :: https://privacy.sexy
-:: Ensure PowerShell is available
 
 :: Initialize environment
 setlocal EnableExtensions DisableDelayedExpansion
@@ -2429,29 +2430,98 @@ exit /b 0
 				}
 				34 {
 					
-					clear
-					Write-Output "Installing: Mullvad Browser..."
+					cls;write-host "Installing: Mullvad Browser . . ."
 					# download & install mullvad browser
-					$u=(irm https://api.github.com/repos/mullvad/mullvad-browser/releases/latest -Headers @{'User-Agent'='PowerShell'}).assets | ? { $_.name -match 'windows.*x86_64.*\.exe$' } | select -f 1 -ExpandProperty browser_download_url
-					$exe = Join-Path $env:TEMP 'mullvad-browser-windows-x86_64.exe'; Get-FileFromWeb $u $exe; saps $exe '/S' -Wait
+					$u=(irm https://api.github.com/repos/mullvad/mullvad-browser/releases/latest -Headers @{'User-Agent'='PowerShell'}).assets | ? { $_.name -match 'windows.*x86_64.*\.exe$' } | select -f 1 -ExpandProperty browser_download_url;$exe = Join-Path $env:TEMP 'mullvad-browser-windows-x86_64.exe'; Get-FileFromWeb $u $exe; saps $exe '/S' -Wait
 					show-menu
 					
 				}
 				35 {
 					
-					clear
-					# https://a11.gdl.netease.com/MuMuInstaller.exe
+					cls;write-host "Installing: Everything . . ."
+					# download & install everything
+					$c=(iwr 'https://www.voidtools.com/everything-1.5a/' -UseBasicParsing).Content; if($c -match 'Everything-[\d.]+a\.x64-Setup\.exe'){$exe="$env:TEMP\$($matches[0])";Get-FileFromWeb "https://www.voidtools.com/$($matches[0])" $exe; saps -wait $exe '/S'}
+					# disable everything service
+					Set-Service -Name 'Everything' -StartupType Manual -ea 0
 					show-menu
 					
 				}
 				36 {
+				
+					cls;write-host "Installing: simplewall . . ."
+					# install simplewall
+					$release = Invoke-RestMethod -Uri "https://api.github.com/repos/henrypp/simplewall/releases/latest" -Headers @{ "User-Agent" = "powershell" }
+					$asset = $release.assets | ? { $_.name -like '*.exe' } | select -f 1;Get-FileFromWeb $asset.browser_download_url "$env:TEMP\$($asset.name)";saps "$env:TEMP\$($asset.name)" "/S" -Wait
+					if (Test-Path "$env:ProgramFiles\simplewall\simplewall.exe") {
+					    # create start shortcut
+						$WScriptShell = New-Object -ComObject WScript.Shell
+						$lnk = $WScriptShell.CreateShortcut("$env:ProgramData\Microsoft\Windows\Start Menu\Programs\simplewall.lnk")
+						$lnk.TargetPath = "C:\Program Files\simplewall\simplewall.exe"
+						$lnk.WorkingDirectory = "C:\Program Files\simplewall"
+						$lnk.Save()
+					    # enable filters
+					    saps -wait "$env:ProgramFiles\simplewall\simplewall.exe" "-install -silent"
+						# load on system startup
+						reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v simplewall /t REG_SZ /d "C:\Program Files\simplewall\simplewall.exe /background" /f >$null 2>&1
+						# skip uac prompt warning
+						# create reg file
+						$xml = @"
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.6" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Author>simplewall</Author>
+    <URI>\simplewallTask</URI>
+  </RegistrationInfo>
+  <Triggers/>
+  <Principals>
+    <Principal id="Author">
+      <RunLevel>HighestAvailable</RunLevel>
+      <UserId>$env:USERDOMAIN\$env:USERNAME</UserId>
+      <LogonType>InteractiveToken</LogonType>
+    </Principal>
+  </Principals>
+  <Settings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>C:\Program Files\simplewall\simplewall.exe</Command>
+      <Arguments>-minimized</Arguments>
+      <WorkingDirectory>C:\Program Files\simplewall</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>
+"@;Set-Content -Path "$env:TEMP\simplewallTask.xml" -Encoding Unicode -Value $xml -Force;schtasks.exe /Create /TN "simplewallTask" /XML "$env:TEMP\simplewallTask.xml" /F | Out-Null
+						# start minimized
+						saps "$env:ProgramFiles\simplewall\simplewall.exe" -WindowStyle Minimized					
+					}
+					show-menu
+					
 				}
 				37 {
+					
+					cls;write-host 'Installing: UniGetUI . . .'
+					$exe="$env:TEMP\UniGetUI.Installer.exe"; Get-FileFromWeb 'https://github.com/marticliment/UniGetUI/releases/latest/download/UniGetUI.Installer.exe' $exe; saps $exe '/VERYSILENT' -Wait
+					show-menu
+					
 				}
 				38 {
+					
+					cls;write-host 'Installing: Process Lasso . . .'
+					$exe="$env:TEMP\processlassosetup64.exe"; Get-FileFromWeb "https://dl.bitsum.com/files/processlassosetup64.exe" $exe; saps $exe '/S' -Wait
+					# prolasso.ini';$destDir='C:\ProgramData\ProcessLasso\config';$destFile="$destDir\prolasso.ini";if(-not(Test-Path $destDir)){
+					# New-Item -Path $destDir -ItemType Directory -Force|Out-Null};Invoke-WebRequest -Uri $githubUrl -OutFile $destFile -ErrorAction Stop
+					show-menu				
+					
 				}
 				39 {
-				}				
+					
+					# rel=Invoke-RestMethod "https://api.github.com/repos/Rem0o/FanControl.Releases/releases/latest"; $asset=$rel.assets | Where-Object { $_.name -match '_net_4_8_Installer\.exe$' } | Select-Object -First 1; if($asset){ $exe=Join-Path $env:TEMP $asset.name; Invoke-WebRequest $asset.browser_download_url -OutFile $exe -UseBasicParsing; Start-Process -FilePath $exe -ArgumentList '/verysilent' -Wait; $fc1="C:\Program Files (x86)\FanControl\FanControl.exe"; $fc2="C:\Program Files\FanControl\FanControl.exe"; if(Test-Path $fc1){ Start-Process $fc1 } elseif(Test-Path $fc2){ Start-Process $fc2 } } }				
+					
+				}
             }
         }
     }

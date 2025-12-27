@@ -1,0 +1,19 @@
+Installing: simplewall . . .
+  ██████████  100.00 % out-file : FileStream was asked to open a device that was not a file. For support for devices like 'com1:' or 'lpt1:',
+call CreateFile, then use the FileStream constructors that take an OS handle as an IntPtr.
+At line:2464 char:7
++ ...             reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\R ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OpenError: (:) [Out-File], NotSupportedException
+    + FullyQualifiedErrorId : FileOpenFailure,Microsoft.PowerShell.Commands.OutFileCommand
+
+Arg0 : The term 'Arg0' is not recognized as the name of a cmdlet, function, script file, or operable program. Check
+the spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2491 char:20
++       <Arguments>$(Arg0) -minimized</Arguments>
++                    ~~~~
+    + CategoryInfo          : ObjectNotFound: (Arg0:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+Press Enter to continue...:
+

@@ -72,8 +72,8 @@ Get-FileFromWeb "https://aka.ms/vs/17/release/vc_redist.x64.exe" "$env:TEMP\vcre
 Get-FileFromWeb "https://aka.ms/vc14/vc_redist.x86.exe" "$env:TEMP\vc_redist.x86.exe"
 Get-FileFromWeb "https://aka.ms/vc14/vc_redist.x64.exe" "$env:TEMP\vc_redist.x64.exe"
 # start c++ installers
-saps -wait "$env:TEMP\vcredist2005_x86.exe"
-saps -wait "$env:TEMP\vcredist2005_x64.exe"
+saps -wait "$env:TEMP\vcredist2005_x86.exe" '/q'
+saps -wait "$env:TEMP\vcredist2005_x64.exe" '/q'
 saps -wait "$env:TEMP\vcredist2008_x86.exe" '/qb'
 saps -wait "$env:TEMP\vcredist2008_x64.exe" '/qb'
 saps -wait "$env:TEMP\vcredist2010_x86.exe" '/passive /norestart'

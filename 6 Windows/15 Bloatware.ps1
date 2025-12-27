@@ -1,125 +1,182 @@
-<# : batch portion
-@echo off
-setlocal DisableDelayedExpansion
-echo "%*"|find /i "-el">nul && set _elev=1
-set _PSarg="""%~f0""" -el
-setlocal EnableDelayedExpansion
->nul 2>&1 fltmc || >nul 2>&1 net session || (
-    if not defined _elev (
-        powershell -NoProfile -Command "Start-Process cmd.exe -ArgumentList '/c', '!_PSarg!' -Verb RunAs" && exit /b 0
-        exit /b 1
-    )
-)
-where pwsh.exe>nul 2>&1 && set "PS1=pwsh" || set "PS1=powershell"
-%PS1% -nop -c "Get-Content '%~f0' -Raw | iex"
-goto :eof
-: end batch / begin powershell #>
-
-$Host.UI.RawUI.WindowTitle = $myInvocation.MyCommand.Definition + " (Administrator)"
-$Host.UI.RawUI.BackgroundColor = "Black"
-$Host.PrivateData.ProgressBackgroundColor = "Black"
-$Host.PrivateData.ProgressForegroundColor = "White"
-Clear-Host
-
-function Get-FileFromWeb {
-    param ([Parameter(Mandatory)][string]$URL, [Parameter(Mandatory)][string]$File)
-    function Show-Progress {
-    param ([Parameter(Mandatory)][Single]$TotalValue, [Parameter(Mandatory)][Single]$CurrentValue, [Parameter(Mandatory)][string]$ProgressText, [Parameter()][int]$BarSize = 10, [Parameter()][switch]$Complete)
-    $percent = $CurrentValue / $TotalValue
-    $percentComplete = $percent * 100
-    if ($psISE) { Write-Progress "$ProgressText" -id 0 -percentComplete $percentComplete }
-    else { Write-Host -NoNewLine "`r$ProgressText $(''.PadRight($BarSize * $percent, [char]9608).PadRight($BarSize, [char]9617)) $($percentComplete.ToString('##0.00').PadLeft(6)) % " }
-    }
-    try {
-    $request = [System.Net.HttpWebRequest]::Create($URL)
-    $response = $request.GetResponse()
-    if ($response.StatusCode -eq 401 -or $response.StatusCode -eq 403 -or $response.StatusCode -eq 404) { throw "Remote file either doesn't exist, is unauthorized, or is forbidden for '$URL'." }
-    if ($File -match '^\.\\') { $File = Join-Path (Get-Location -PSProvider 'FileSystem') ($File -Split '^\.')[1] }
-    if ($File -and !(Split-Path $File)) { $File = Join-Path (Get-Location -PSProvider 'FileSystem') $File }
-    if ($File) { $fileDirectory = $([System.IO.Path]::GetDirectoryName($File)); if (!(Test-Path($fileDirectory))) { [System.IO.Directory]::CreateDirectory($fileDirectory) | Out-Null } }
-    [long]$fullSize = $response.ContentLength
-    [byte[]]$buffer = new-object byte[] 1048576
-    [long]$total = [long]$count = 0
-    $reader = $response.GetResponseStream()
-    $writer = new-object System.IO.FileStream $File, 'Create'
-    do {
-    $count = $reader.Read($buffer, 0, $buffer.Length)
-    $writer.Write($buffer, 0, $count)
-    $total += $count
-    if ($fullSize -gt 0) { Show-Progress -TotalValue $fullSize -CurrentValue $total -ProgressText " $($File.Name)" }
-    } while ($count -gt 0)
-    }
-    finally {
-    $reader.Close()
-    $writer.Close()
-    }
-}
-
-function show-menu {
-	Clear-Host
-	Write-Host " 1. Remove : All Bloatware (Recommended)"
-    Write-Host " 2. Install: Store"
-	Write-Host " 3. Install: All UWP Apps"
-    Write-Host " 4. Install: UWP Features"
-    Write-Host " 5. Install: Legacy Features"
-	Write-Host " 6. Install: One Drive"
-    Write-Host " 7. Install: Remote Desktop Connection"
-    Write-Host " 8. Install: Legacy Snipping Tool W10"
-    Write-Host " 9. Install: Legacy Paint W10"
-    Write-Host "10. Install: GameInput"
-}
+	<# : batch portion
+	@setlocal DisableDelayedExpansion
+	@echo off
+	Color 0F
+	echo "%*"|find /i "-el" >nul && set _elev=1
+	set arg="""%~f0""" -el
+	setlocal EnableDelayedExpansion
+	>nul 2>&1 fltmc || >nul 2>&1 net session || (
+	if not defined _elev (
+	powershell -nop -c "saps cmd.exe '/c', '!arg!' -Verb RunAs" >nul 2>&1 && exit /b 0
+	)
+	echo.
+	echo This script require administrator privileges.
+	echo To do so, right click on this script and select 'Run as administrator'.
+	pause
+	exit 1
+	)
+	where pwsh.exe >nul 2>&1 && set "ps1=pwsh" || set "ps1=powershell"
+	%ps1% -nop -ep Bypass -c "Get-Content '%~f0' -Raw | iex"
+	goto :eof
+	: end batch / begin powershell #>
+	
+	$Host.UI.RawUI.WindowTitle='Bloatware (Administrator)'
+	
+	function show-menu {
+	Clear-Host	
+	Write-Host " 1. Remove : All Bloatware (Recommended)"	
+	Write-Host " 2. Install: Store"	
+	Write-Host " 3. Install: All UWP Apps"	
+	Write-Host " 4. Install: UWP Features"	
+	Write-Host " 5. Install: Legacy Features"	
+	Write-Host " 6. Install: One Drive"	
+	Write-Host " 7. Install: Remote Desktop Connection"	
+	Write-Host " 8. Install: Legacy Snipping Tool W10"	
+	Write-Host " 9. Install: Legacy Paint W10"	
+	Write-Host "10. Install: GameInput"	
+	}
+	
 	show-menu
-    while ($true) {
-        $choice = Read-Host " "
-        if ($choice -match '^(10|[1-9])$') {
-        switch ($choice) {
-            1 {
-				
-                Clear-Host
-				$progresspreference = 'silentlycontinue'
-				$ErrorActionPreference = 'SilentlyContinue'				
-	            Write-Host "Uninstalling: UWP Apps. Please wait . . ."
-				# uninstall all uwp apps keep widgets, xbox, copilot, nvidia & cbs
-				Get-AppxPackage -AllUsers | Where-Object {
-	                $_.Name -notlike '*NVIDIA*' -and
-	                $_.Name -notlike '*CBS*' -and
-	                $_.Name -notlike '*Microsoft.Windows.Ai.Copilot.Provider*' -and
-	                $_.Name -notlike '*Microsoft.Copilot*' -and			
-	                $_.Name -notlike '*Gaming*' -and
-	                $_.Name -notlike '*Xbox*' -and
-		            $_.Name -notlike '*Widgets*' -and
-	                $_.Name -notlike '*Experience*'
-	            } | Remove-AppxPackage
-				$c = (Invoke-WebRequest "https://raw.githubusercontent.com/FR33THYFR33THY/Ultimate-Windows-Optimization-Guide/main/6%20Windows/15%20Bloatware.ps1" -UseBasicParsing).Content				
-				$c = $c -replace 'Get-AppXPackage -AllUsers \| Where-Object \{ \$_.Name -notlike ''\*NVIDIA\*'' -and \$_.Name -notlike ''\*CBS\*'' \} \| Remove-AppxPackage -ErrorAction SilentlyContinue', ''
-				$c = $c -replace 'Remove-WindowsCapability -Online -Name "Media\.WindowsMediaPlayer~~~~0\.0\.12\.0" \| Out-Null', ''
-				$c = $c -replace 'Dism /Online /NoRestart /Disable-Feature /FeatureName:MediaPlayback \| Out-Null', ''
-				$c = $c -replace 'Write-Host "Restart to apply \. \. \."\s*\$\w+ = \$Host\.UI\.RawUI\.ReadKey\("NoEcho,IncludeKeyDown"\)', ''
-				$c = $c -replace 'show-menu', ''				
-				if ($c -match '2 \{\s*([\s\S]*?)\s*\}\s*3 \{') {Invoke-Expression $matches[1]}										
-				# create notepad legacy shortcut
-				$shell = New-Object -ComObject WScript.Shell
-				$shortcut = $shell.CreateShortcut("$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Accessories\Notepad.lnk")
-				$shortcut.TargetPath = "$env:SystemRoot\System32\notepad.exe"
-				$shortcut.Save()
-							
-				# install photo viewer
-				'tif','tiff','bmp','dib','gif','jfif','jpe','jpeg','jpg','jxr','png','ico' | ForEach-Object {reg add "HKCU\SOFTWARE\Classes\.${_}" /ve /t REG_SZ /d "PhotoViewer.FileAssoc.Tiff" /f >$null 2>&1}
-				# uwp features
-				# uninstall paint
-				Remove-WindowsCapability -Online -Name "Microsoft.Windows.MSPaint~~~~0.0.1.0" -ea 0 2>&1|out-null
-				# uninstall update for windows 10 for x64-based systems (KB5001716)
-				cmd /c "MsiExec.exe /X{B8D93870-98D1-4980-AFCA-E26563CDFB79} /qn >nul 2>&1"
-
-				# character map
-				Remove-Item "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Accessories\System Tools\Character Map.lnk" -force -ea 0
-				# wallpaper
-				Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WallPaper" -Value "C:\Windows\web\wallpaper\Windows\img0.jpg" | Out-Null
-				Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers" -Name "BackgroundHistoryPath0" -Value "C:\Windows\web\wallpaper\Windows\img0.jpg" | Out-Null
-				Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers" -Name "CurrentWallpaperPath" -Value "C:\Windows\web\wallpaper\Windows\img0.jpg" | Out-Null
-				Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers" -Name "BackgroundType" -Value 0 -Type DWord | Out-Null
-
-				$MultilineComment = @'
+	while ($true) {
+	$choice = Read-Host " "
+	if ($choice -match '^(10|[1-9])$') {
+	switch ($choice) {
+	1 {	
+	Clear-Host
+	$ProgressPreference='SilentlyContinue'
+	Write-Host "Uninstalling: UWP Apps. Please wait . . ."
+	# uninstall all uwp apps keep
+	# uninstall all uwp apps keep nvidia, cbs, winget, copilot, xbox & widgets
+	Get-AppxPackage -AllUsers | ? Name -notmatch 'NVIDIA|CBS|DesktopAppInstaller|Winget|Copilot|Gaming|Xbox|Widgets|Experience' | Remove-AppxPackage -ea 0
+	Clear-Host				
+	Write-Host "Uninstalling: UWP Features. Please wait . . ."
+	# uninstall all uwp features				
+	# notepad & media player left out
+	Remove-Item "$env:TEMP\ProgramData\Microsoft\Windows\Start Menu\Programs\Accessories\System Tools\Character Map.lnk" -force -ea 0	
+	Remove-WindowsCapability -Online -Name "App.StepsRecorder~~~~0.0.1.0" -ea 0	| Out-Null
+	Remove-WindowsCapability -Online -Name "App.Support.QuickAssist~~~~0.0.1.0" -ea 0 | Out-Null
+	Remove-WindowsCapability -Online -Name "Browser.InternetExplorer~~~~0.0.11.0" -ea 0	| Out-Null
+	Remove-WindowsCapability -Online -Name "DirectX.Configuration.Database~~~~0.0.1.0" -ea 0 | Out-Null				
+	Remove-WindowsCapability -Online -Name "Hello.Face.18967~~~~0.0.1.0" -ea 0 | Out-Null				
+	Remove-WindowsCapability -Online -Name "Hello.Face.20134~~~~0.0.1.0" -ea 0 | Out-Null				
+	Remove-WindowsCapability -Online -Name "MathRecognizer~~~~0.0.1.0" -ea 0 | Out-Null				
+	# breaks media player legacy
+	# Remove-WindowsCapability -Online -Name "Media.WindowsMediaPlayer~~~~0.0.12.0" | Out-Null				
+	Remove-WindowsCapability -Online -Name "Microsoft.Wallpapers.Extended~~~~0.0.1.0" -ea 0	| Out-Null
+	Remove-WindowsCapability -Online -Name "Microsoft.Windows.MSPaint~~~~0.0.1.0" -ea 0	| Out-Null
+	Remove-WindowsCapability -Online -Name "Microsoft.Windows.PowerShell.ISE~~~~0.0.1.0" -ea 0 | Out-Null				
+	Remove-WindowsCapability -Online -Name "Microsoft.Windows.WordPad~~~~0.0.1.0" -ea 0	| Out-Null				
+	Remove-WindowsCapability -Online -Name "OneCoreUAP.OneSync~~~~0.0.1.0" -ea 0 | Out-Null				
+	Remove-WindowsCapability -Online -Name "OpenSSH.Client~~~~0.0.1.0" -ea 0 | Out-Null				
+	Remove-WindowsCapability -Online -Name "Print.Fax.Scan~~~~0.0.1.0" -ea 0 | Out-Null				
+	Remove-WindowsCapability -Online -Name "Print.Management.Console~~~~0.0.1.0" -ea 0 | Out-Null				
+	# breaks installer & uninstaller programs
+	# Remove-WindowsCapability -Online -Name "VBSCRIPT~~~~" | Out-Null
+	Remove-WindowsCapability -Online -Name "WMIC~~~~" -ea 0 | Out-Null
+	# breaks uwp snippingtool w10
+	# Remove-WindowsCapability -Online -Name "Windows.Client.ShellComponents~~~~0.0.1.0" | Out-Null
+	Remove-WindowsCapability -Online -Name "Windows.Kernel.LA57~~~~0.0.1.0" -ea 0 | Out-Null
+	Clear-Host
+    Write-Host "Uninstalling: Legacy Features. Please wait . . ."
+    # uninstall all legacy features
+    # .net framework 4.8 advanced services left out
+    # Dism /Online /NoRestart /Disable-Feature /FeatureName:NetFx4-AdvSrvs | Out-Null
+    Dism /Online /NoRestart /Disable-Feature /FeatureName:WCF-Services45 | Out-Null
+    Dism /Online /NoRestart /Disable-Feature /FeatureName:WCF-TCP-PortSharing45 | Out-Null
+    Dism /Online /NoRestart /Disable-Feature /FeatureName:MediaPlayback | Out-Null
+    Dism /Online /NoRestart /Disable-Feature /FeatureName:Printing-PrintToPDFServices-Features | Out-Null
+    Dism /Online /NoRestart /Disable-Feature /FeatureName:Printing-XPSServices-Features | Out-Null
+    Dism /Online /NoRestart /Disable-Feature /FeatureName:Printing-Foundation-Features | Out-Null
+    Dism /Online /NoRestart /Disable-Feature /FeatureName:Printing-Foundation-InternetPrinting-Client | Out-Null
+    Dism /Online /NoRestart /Disable-Feature /FeatureName:MSRDC-Infrastructure | Out-Null
+    # breaks search
+    # Dism /Online /NoRestart /Disable-Feature /FeatureName:SearchEngine-Client-Package | Out-Null
+    Dism /Online /NoRestart /Disable-Feature /FeatureName:SMB1Protocol | Out-Null
+    Dism /Online /NoRestart /Disable-Feature /FeatureName:SMB1Protocol-Client | Out-Null
+    Dism /Online /NoRestart /Disable-Feature /FeatureName:SMB1Protocol-Deprecation | Out-Null
+    Dism /Online /NoRestart /Disable-Feature /FeatureName:SmbDirect | Out-Null
+    Dism /Online /NoRestart /Disable-Feature /FeatureName:Windows-Identity-Foundation | Out-Null
+    Dism /Online /NoRestart /Disable-Feature /FeatureName:MicrosoftWindowsPowerShellV2Root | Out-Null
+    Dism /Online /NoRestart /Disable-Feature /FeatureName:MicrosoftWindowsPowerShellV2 | Out-Null
+    Dism /Online /NoRestart /Disable-Feature /FeatureName:WorkFolders-Client | Out-Null
+	Clear-Host
+    Write-Host "Uninstalling: Legacy Apps. Please wait . . ."
+    # uninstall microsoft update health tools w11
+    cmd /c "MsiExec.exe /X{C6FD611E-7EFE-488C-A0E0-974C09EF6473} /qn >nul 2>&1"
+    # uninstall microsoft update health tools w10
+    cmd /c "MsiExec.exe /X{1FC1A6C2-576E-489A-9B4A-92D21F542136} /qn >nul 2>&1"
+    # clean microsoft update health tools w10
+    cmd /c "reg delete `"HKLM\SYSTEM\ControlSet001\Services\uhssvc`" /f >nul 2>&1"
+    Unregister-ScheduledTask -TaskName PLUGScheduler -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
+    # uninstall update for windows 10 for x64-based systems
+    cmd /c "MsiExec.exe /X{B9A7A138-BFD5-4C73-A269-F78CCA28150E} /qn >nul 2>&1"
+    cmd /c "MsiExec.exe /X{85C69797-7336-4E83-8D97-32A7C8465A3B} /qn >nul 2>&1"
+	cmd /c "MsiExec.exe /X{B8D93870-98D1-4980-AFCA-E26563CDFB79} /qn >nul 2>&1"
+    # stop onedrive running
+    Stop-Process -Force -Name OneDrive -ErrorAction SilentlyContinue | Out-Null
+    # uninstall onedrive w10
+    cmd /c "C:\Windows\SysWOW64\OneDriveSetup.exe -uninstall >nul 2>&1"
+    # clean onedrive w10
+    Get-ScheduledTask | Where-Object {$_.Taskname -match 'OneDrive'} | Unregister-ScheduledTask -Confirm:$false
+    # uninstall onedrive w11
+    cmd /c "C:\Windows\System32\OneDriveSetup.exe -uninstall >nul 2>&1"
+    # clean adobe type manager w10
+    cmd /c "reg delete `"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Font Drivers`" /f >nul 2>&1"
+    # uninstall old snippingtool w10
+    Start-Process "C:\Windows\System32\SnippingTool.exe" -ArgumentList "/Uninstall"
+    Clear-Host
+    # silent window for old snippingtool w10
+    $processExists = Get-Process -Name SnippingTool -ErrorAction SilentlyContinue
+    if ($processExists) {
+    $running = $true
+    do {
+    $openWindows = Get-Process | Where-Object { $_.MainWindowTitle -ne '' } | Select-Object MainWindowTitle
+    foreach ($window in $openWindows) {
+    if ($window.MainWindowTitle -eq 'Snipping Tool') {
+    Stop-Process -Force -Name SnippingTool -ErrorAction SilentlyContinue | Out-Null
+    $running = $false
+    }
+    }
+    } while ($running)
+    } else {
+    }
+    Timeout /T 1 | Out-Null
+	# uninstall remote desktop connection
+    Start-Process "mstsc" -ArgumentList "/Uninstall"
+    Clear-Host
+    # silent window for remote desktop connection
+    $processExists = Get-Process -Name mstsc -ErrorAction SilentlyContinue
+    if ($processExists) {
+    $running = $true
+    do {
+    $openWindows = Get-Process | Where-Object { $_.MainWindowTitle -ne '' } | Select-Object MainWindowTitle
+    foreach ($window in $openWindows) {
+    if ($window.MainWindowTitle -eq 'Remote Desktop Connection') {
+    Stop-Process -Force -Name mstsc -ErrorAction SilentlyContinue | Out-Null
+    $running = $false
+    }
+    }
+    } while ($running)
+    } else {
+    }
+	
+	# create notepad legacy shortcut
+    $shell = New-Object -ComObject WScript.Shell
+    $shortcut = $shell.CreateShortcut("$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Accessories\Notepad.lnk")
+    $shortcut.TargetPath = "$env:SystemRoot\System32\notepad.exe"
+    $shortcut.Save()
+    # install photo viewer
+    'tif','tiff','bmp','dib','gif','jfif','jpe','jpeg','jpg','jxr','png','ico' | ForEach-Object {reg add "HKCU\SOFTWARE\Classes\.${_}" /ve /t REG_SZ /d "PhotoViewer.FileAssoc.Tiff" /f >$null 2>&1}							
+	# wallpaper
+	# disable spotlight
+	New-ItemProperty -Path "HKCU:\SOFTWARE\Policies\Microsoft\Windows\CloudContent" -Name "DisableWindowsSpotlightFeatures" -Value 1 -PropertyType DWORD -Force | Out-Null
+	New-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel' -Name '{2cc5ca98-6485-489a-920e-b3e88a6ccce3}' -PropertyType DWORD -Value 1 -Force | Out-Null
+	# solid color black
+	Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name 'Wallpaper' -Value ''
+	Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers' -Name 'BackgroundType' -Type DWord -Value 1
+			
+	# create reg file
+	$MultilineComment = @'
 Windows Registry Editor Version 5.00
 
 ; This reg file automatically applies Media Player setup phase as you would like to complete, no document history, no data sharing. Can be implemented to the ISOs.
@@ -644,17 +701,15 @@ Windows Registry Editor Version 5.00
 "Hash"="FvJcqeZpmOE="
 "ProgId"="txtfile"
 '@
-				Set-Content -Path "$env:TEMP\Registry.reg" -Value $MultilineComment -Force -ErrorAction SilentlyContinue | Out-Null
-				# import reg file
-				reg import "$env:TEMP\Registry.reg" 2> $null
-				
-				Clear-Host	
-				Write-Host "Restart to apply . . ."	
-				$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")	
-				show-menu	
-
-			}
-			2 {
+	Set-Content -Path "$env:TEMP\bloatware.reg" -Value $MultilineComment -Force -ea 0 | Out-Null
+	# import reg file
+	reg import "$env:TEMP\bloatware.reg" 2> $null
+	Clear-Host
+	Write-Host "Restart to apply . . ."
+	$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+	show-menu	
+	}
+	2 {
 
 				Clear-Host
 				Write-Host "Installing: Store. Please wait . . ."
@@ -900,27 +955,16 @@ exit
 			}    
 			10 {
 			
-				Write-Host "Installing: GameInput . . ."
-					
-				if (Get-Command winget -ErrorAction SilentlyContinue) {
-					winget.exe install --id "Microsoft.GameInput" --exact --source winget --accept-source-agreements --disable-interactivity --silent  --accept-package-agreements --force --no-progress | Out-Null
-				} else {
-				
-					$exe = "$env:TEMP\7zip.exe"
-					$url = (Invoke-RestMethod "https://api.github.com/repos/ip7z/7zip/releases/latest").assets |
-						Where-Object { $_.name -like "*x64.exe" } |
-						Select-Object -First 1 -ExpandProperty browser_download_url						
-					Get-FileFromWeb $url -File $exe					
-					Start-Process -FilePath $exe -ArgumentList '/S' -Wait
-						
-					Get-FileFromWeb -URL "https://www.nuget.org/api/v2/package/Microsoft.GameInput" -File "$env:TEMP\microsoft.gameinput.nupkg"						
-					$zip = "$env:ProgramFiles\7-Zip\7z.exe"
-					Start-Process $zip -ArgumentList "x `"$env:TEMP\microsoft.gameinput.nupkg`" -o`"$env:TEMP`" -y" -Wait						
-					Start-Process "msiexec.exe" -ArgumentList "/i `"$env:TEMP\redist\GameInputRedist.msi`" /quiet /norestart" -Wait
+				Write-Host "Installing: HEVC Video Extensions & HEIF Image Extensions . . ."					
+				# install hevc video extension needed for amd recording				
+				Get-AppXPackage -AllUsers *Microsoft.HEVCVideoExtension* | Foreach {Add-AppxPackage -DisableDevelopmentMode -Register -ErrorAction SilentlyContinue "$($_.InstallLocation)\AppXManifest.xml"}				
+				Timeout /T 2 | Out-Null				
+				# install heif image extension needed for some files				
+				Get-AppXPackage -AllUsers *Microsoft.HEIFImageExtension* | Foreach {Add-AppxPackage -DisableDevelopmentMode -Register -ErrorAction SilentlyContinue "$($_.InstallLocation)\AppXManifest.xml"}				
+				Timeout /T 2 | Out-Null		
 
 				}
 
 			}    
 		} 
 	} else { Write-Host "Invalid input. Please select a valid option (1-10)." } 
-}
