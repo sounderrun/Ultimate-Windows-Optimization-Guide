@@ -68,23 +68,23 @@
     Write-Host "Optimize your game settings to achieve this."
     Write-Host "Further tuning can be done via config files or launch options."
 	Write-Host ""
-    Write-Host " 1. Exit		18. NanaZip		35. Everything"
-    Write-Host " 2. 7-Zip		19. Brave		36. simplewall"
-    Write-Host " 3. Battle.net		20. Revo Uninstaller	37. UniGetUI"
-	Write-Host " 4. Discord		21. CoreTemp		38. Process Lasso"
-    Write-Host " 5. Electronic Arts	22. LibreWolf		39. Fan Control"
-    Write-Host " 6. Epic Games		23. Office 365"
-    Write-Host " 7. Escape From Tarkov	24. Portmaster"
-    Write-Host " 8. GOG launcher	25. PowerShell 7"
-    Write-Host " 9. Google Chrome	26. Process Explorer"
-    Write-Host "10. League Of Legends	27. StartXBack"
-    Write-Host "11. Notepad ++		28. VLC media player"
-    Write-Host "12. OBS Studio		29. Winget"
-	Write-Host "13. Roblox		30. .NET Freamework 3.5"
-    Write-Host "14. Rockstar Games	31. Edge WebView2"
-    Write-Host "15. Steam		32. Firefox"
-    Write-Host "16. Ubisoft Connect	33. Thorium AVX2"
-    Write-Host "17. Valorant		34. Mullvad Browser"
+    Write-Host " 1. Exit		18. NanaZip		35. Everything		52. privacy.sexy"
+    Write-Host " 2. 7-Zip		19. Brave		36. simplewall		53. Win11DisableOrRestoreRoundedCorners"
+    Write-Host " 3. Battle.net		20. Revo Uninstaller	37. UniGetUI		54. HWMonitor"
+	Write-Host " 4. Discord		21. CoreTemp		38. Process Lasso	55. DaVinci Resolve"
+    Write-Host " 5. Electronic Arts	22. LibreWolf		39. Fan Control		56. ESET Online Scanner"
+    Write-Host " 6. Epic Games		23. Office 365		40. LibreOffice		57. FL Studio"
+    Write-Host " 7. Escape From Tarkov	24. Portmaster		41. Wireshark		58. JDownloader 2"
+    Write-Host " 8. GOG launcher	25. PowerShell 7	42. Winaero Tweaker	59. MumuPlayer"
+    Write-Host " 9. Google Chrome	26. Process Explorer	43. Driver Booster 	60. MyDockFinder"
+    Write-Host "10. League Of Legends	27. StartAllBack	44. LatencyMon		61. VirtualBox"
+    Write-Host "11. Notepad ++		28. VLC media player	45. Winhance		62. qBittorent"
+    Write-Host "12. OBS Studio		29. Winget		46. Playnite		63. Telegram"
+	Write-Host "13. Roblox		30. .NET Freamework 3.5	47. Mozilla Thunderbird	64. VMware Workstation Pro"
+    Write-Host "14. Rockstar Games	31. Edge WebView2	48. Github Desktop	65. Proton VPN"
+    Write-Host "15. Steam		32. Firefox		49. Visual Studio Code	66. Malwarebytes"
+    Write-Host "16. Ubisoft Connect	33. Thorium AVX2	50. ShareX		67. WinRar"
+    Write-Host "17. Valorant		34. Mullvad Browser	51. RyTuneX		68. Cinebench"
 	}
 
 while ($true) {
@@ -875,9 +875,7 @@ $lnk.Save(); $lnk = $null
 				}
 				18 {
 					
-					Clear-Host
-					$progresspreference = 'silentlycontinue'
-					Write-Host 'Installing: NanaZip . . .'
+					cls;$progresspreference = 'silentlycontinue';Write-Host 'Installing: NanaZip . . .'
 					# download & install nanazip
 					$api=irm https://api.github.com/repos/M2Team/NanaZip/releases/latest -ea 0; $xml =$api.assets | ? name -like '*.xml' | select -f 1; $msix=$api.assets | ? name -like '*.msixbundle' | select -f 1
 					if($xml -and $msix){
@@ -1694,14 +1692,13 @@ Windows Registry Editor Version 5.00
 						Write-Host "Installing: Microsoft .NET Framework 3.5 . . ."
 						Write-Host "Edition "  -NoNewLine; Write-Host "$os $edition" -ForegroundColor DarkGray
 						Write-Host "OS build " -NoNewLine; Write-Host $build -ForegroundColor DarkGray
-						Write-Host ""
 					}
 					
 					# for Windows 10 build 14393/15063/16299 - dotNet2035_W10P1.exe
 					if ($build -le 16299) {
 						show-info
 						$URL = "https://github.com/ionuttbara/dotNet2035onW1X/releases/download/release_tag/dotNet2035_W10P1.exe"; $File = "$env:TEMP\dotNet2035_W10P1.exe"
-						Get-FileFromWeb $URL $File; saps $File "/ai" -Wait
+						Get-FileFromWeb $URL $File; saps $File "/ais /gm2" -Wait
 					}
 					
 					# for Windows 10 17134/17363/18362/19041  -dotNet2035_W10P2.exe
@@ -1709,7 +1706,7 @@ Windows Registry Editor Version 5.00
 						show-info
 						$URL = "https://github.com/ionuttbara/dotNet2035onW1X/releases/download/release_tag/dotNet2035_W10P2.exe"
 						$File = "$env:TEMP\dotNet2035_W10P2.exe"
-						Get-FileFromWeb $URL $File; saps $File "/ai" -Wait
+						Get-FileFromWeb $URL $File; saps $File "/ais /gm2" -Wait
 					}
 					
 					# Only for Windows 10 build 19041 (including EKB versions 19042 - 19045)
@@ -1717,7 +1714,7 @@ Windows Registry Editor Version 5.00
 						show-info
 						$URL = "https://github.com/abbodi1406/dotNetFx35W10/releases/download/v0.25.11/dotNetFx35_WX_10_x86_x64.exe"
 						$File = "$env:TEMP\dotNetFx35_WX_10_x86_x64.exe"
-						Get-FileFromWeb $URL $File; saps $File "/ai" -Wait
+						Get-FileFromWeb $URL $File; saps $File "/ais /gm2" -Wait
 					}
 					
 					# for Windows 11 22000/22621 - dotNet2035_W11.exe
@@ -1725,29 +1722,22 @@ Windows Registry Editor Version 5.00
 						show-info
 						$URL = "https://github.com/ionuttbara/dotNet2035onW1X/releases/download/release_tag/dotNet2035_W11.exe"
 						$File = "$env:TEMP\dotNet2035_W11.exe"
-						Get-FileFromWeb $URL $File; saps $File "/ai" -Wait -ea 1
-						Start-Sleep -Seconds 5
-						$feature = Get-WindowsOptionalFeature -Online -FeatureName NetFx3
-						if ($feature.State -eq 'Enabled') {$null} 
-						else {
-							$URL = "https://github.com/akbarhabiby/Windows11_dotNET-3.5/archive/refs/tags/v1.1.zip"; $File = "$env:TEMP\v1.1.zip"
-							Get-FileFromWeb $URL $File; Expand-Archive $File $env:TEMP -Force
-							$batch = "$env:TEMP\Windows11_dotNET-3.5-1.1\app\start.bat"; (gc $batch) | ? {$_ -notmatch '^\s*pause\s*$'} | Set-Content $batch; saps -Wait $batch
-						}
+						Get-FileFromWeb $URL $File; saps $File "/ais /gm2 " -Wait
 					}
-					# unsupported build
-					else {show-info; dism.exe /Online /Enable-Feature /FeatureName:NetFx3 /All /NoRestart}
+					# enable net 3.5 via win update if failed install or unsupported build
+					$feature = Get-WindowsOptionalFeature -Online -FeatureName NetFx3
+					if ($feature.State -eq 'Enabled') {cls; show-info; dism.exe /Online /Enable-Feature /FeatureName:NetFx3 /All /NoRestart}
 					show-menu
 					
 				}
 				31 {
 					
 					clear
-					Write-Host "Installing & Updating: EdgeWebView 2 . . ."				
+					Write-Host "Installing & Updating: EdgeWebView 2 . . ."			
 					# stop edge running
 					$stop = "MicrosoftEdgeUpdate", "OneDrive", "WidgetService", "Widgets", "msedge", "Resume", "CrossDeviceResume", "msedgewebview2"; $stop | % { Stop-Process -Name $_ -force -ea 0 }
 					# download & install edge webview
-					$exe="$env:TEMP\MicrosoftEdgeWebview2Setup.exe"; Get-FileFromWeb "https://go.microsoft.com/fwlink/p/?LinkId=2124703" $exe; saps $exe -wait
+					$exe="$env:TEMP\MicrosoftEdgeWebview2Setup.exe"; Get-FileFromWeb "https://go.microsoft.com/fwlink/p/?LinkId=2124703" $exe; saps $exe "/silent /install" -wait
 					show-menu
 					
 				}
@@ -2438,7 +2428,7 @@ exit /b 0
 				}
 				35 {
 					
-					cls;write-host "Installing: Everything . . ."
+					cls;write-host "Installing: Everything . . .";$ProgressPreference = 'SilentlyContinue'
 					# download & install everything
 					$c=(iwr 'https://www.voidtools.com/everything-1.5a/' -UseBasicParsing).Content; if($c -match 'Everything-[\d.]+a\.x64-Setup\.exe'){$exe="$env:TEMP\$($matches[0])";Get-FileFromWeb "https://www.voidtools.com/$($matches[0])" $exe; saps -wait $exe '/S'}
 					# disable everything service
@@ -2512,19 +2502,456 @@ exit /b 0
 					
 					cls;write-host 'Installing: Process Lasso . . .'
 					$exe="$env:TEMP\processlassosetup64.exe"; Get-FileFromWeb "https://dl.bitsum.com/files/processlassosetup64.exe" $exe; saps $exe '/S'
-					$p="$env:ProgramData\Microsoft\Windows\Start Menu\Programs"; while (-not (Test-Path "$p\Process Lasso")) { sleep 1 }
-					mv "$p\Process Lasso\Process Lasso.lnk" $p -force -ea 0; ri "$p\Process Lasso" -recurse -force -ea 0					
+					$p="$env:ProgramData\Microsoft\Windows\Start Menu\Programs"; while (-not (Test-Path "$p\Process Lasso")) {sleep 1};mv "$p\Process Lasso\Process Lasso.lnk" $p -force -ea 0; ri "$p\Process Lasso" -recurse -force -ea 0					
+					# disable game mode
+					Reg.exe add "HKCU\SOFTWARE\Microsoft\GameBar" /v "AllowAutoGameMode" /t REG_DWORD /d 0 /f >$null 2>&1
+					Reg.exe add "HKCU\SOFTWARE\Microsoft\GameBar" /v "AutoGameModeEnabled" /t REG_DWORD /d 0 /f >$null 2>&1
 					# create ini file
-					# prolasso.ini';$destDir='C:\ProgramData\ProcessLasso\config';$destFile="$destDir\prolasso.ini";if(-not(Test-Path $destDir)){
-					# New-Item -Path $destDir -ItemType Directory -Force|Out-Null};Invoke-WebRequest -Uri $githubUrl -OutFile $destFile -ErrorAction Stop
-					show-menu				
+					$MultilineComment = @'
+[Administration]
+Version=6450400
+ConfigPasswordMD5=
+[OutOfControlProcessRestraint]
+OocOn=true
+ExcludeChildrenOfForeground=false
+DisableProBalanceWhenSysIdle=false
+ProBalanceDropOneRandomCore=false
+DoNotAdjustAffinityIfCustomized=true
+OocDisableCoreParkingWhileIn=true
+UseEfficiencyMode=false
+DisableProBalanceIfSysIdleThisManyMS=30000
+TotalProcessorUsageBeforeRestraint=5
+PerProcessUsageBeforeRestraint=2
+TimeOverQuotaBeforeRestraint=1100
+PerProcessUsageForRestore=1
+PlayOnRestraint=C:\WINDOWS\media\Windows Pop-up Blocked.wav
+PlayOnRestore=C:\WINDOWS\media\Windows Feed Discovered.wav
+MinimumTimeOfRestraint=4200
+MaximumTimeOfRestraint=0
+TameOnlyNormal=true
+LowerToIdleInsteadOfBelowNormal=false
+ExcludeServices=true
+PlaySoundOnRestraint=false
+PlaySoundOnRestore=false
+RestrainByAffinity=false
+RestraintAffinity=
+ExcludeForegroundProcesses2=true
+DoNotLowerPriorityClass=false
+LowerIOPriorityDuringRestraint=false
+MatchExclusionsByPathnameToo=false
+ChangeTrayIconOnRestraint=true
+OocExclusions=conhost.exe,fl64.exe,nvim.exe,vscode.exe,wt.exe
+OocHardCodedExclusionOverrides=
+[GUI]
+ClearLogAtExit=false
+ShowCPUCoreUtilGraphs=true
+ShowGraphLegend=true
+ShowGraphCPU=true
+ShowGraphResponsiveness=true
+ShowGraphMemoryLoad=true
+ShowGraphProBalanceEvents=true
+ShowGraphSelectedProcessesCPUHistory=true
+ProBalanceCountersOnGraph=true
+ShowGraphLicenseName=false
+ShowPowerProfile=true
+GraphShowTooltips=true
+ShowCPUUtilityAsPrimary=true
+[Advanced]
+AutomaticUpdate=false
+[Performance]
+DefaultsLevel=327942
+GracefulWaitTimeInMs=5000
+UpdateSpeedGUI=5000
+UpdateSpeedCore=5000
+[Sampling]
+SamplingEnabled=false
+SamplingIntervalSeconds=900
+SamplingOutputPath=
+SamplingIncludePattern=*
+SamplingExcludePattern=
+[Performance]
+ManageOnlyCurrentUser=false
+ExitOnCloseWindow=false
+SoundsOff=true
+IsConfigWritable=true
+ForcedMode=false
+IgnoreProblematicProcesses=false
+IgnoreSuspendedProcesses=false
+SetTimerResolutionAtStartup=5000
+[ForegroundBoosting]
+BoostForegroundProcess=false
+ForegroundBoostPriorityClass=0x8000
+ForegroundBoostGPU=-1
+BoostOnlyNormal=true
+BoostOnlyNormalGPU=true
+ForegroundBoostExclusions=
+[SystemTrayIcon]
+UseStaticIcon=false
+ShowResponsivnessInTrayInsteadOfProcessorUsage=false
+[Logging]
+LogDisable=false
+IncludeCommandLines=false
+LogSmartTrim=true
+LogCPULimiter=true
+LogEfficiencyMode=true
+LogGroupExtender=true
+LogCPUSets=true
+LogProBalanceParkingChanges=true
+LogProcessExecutions=false
+LogProcessTerminations=false
+LogProcessesDisallowed=true
+LogDefaultPriorityAdjustments=true
+LogDefaultAffinityAdjustments=true
+LogProBalanceBegin=true
+LogProBalanceEnd=true
+LogInstanceLimitTerminations=true
+LogPowerProfileChanges=true
+[MemoryManagement]
+SmartTrimIsEnabled=true
+SmartTrimWorkingSetTrims=true
+SmartTrimClearStandbyList=true
+SmartTrimClearFileCache=true
+ClearStandbyFreeRAMThresholdMB=8124
+ClearStandbyOnlyInPerfMode=true
+SmartTrimExclusions=obs64.exe,fl64.exe,audiodg.exe,csrss.exe,dwm.exe,fontdriver.exe,lsalso.exe,lsass.exe,smss.exe,svchost.exe,winlogon.exe
+SmartTrimAutoMinimumRAMLoad=80
+MinimumProcessWSSInMb=356
+SmartTrimIntervalMins=15
+[SysTrayBalloons]
+EnableSystemTrayNotification=false
+BalloonTipDuration=10000
+ShowBalloonsForOocPriorityRestoration=false
+[ProcessAllowances]
+ApplyInstanceCountLimitsToAllUsers=false
+AllowedProcesses=
+DisallowedProcesses=
+InstanceLimitedProcesses=
+InstanceManagedCPUAffinities=
+ProcessThrottles=
+OneTimeProcessThrottles=
+CPULimitRules=
+[ProcessDefaults]
+NamedAffinities=
+DefaultPriorities=audiodg.exe,high,fl64.exe,high
+DefaultIOPriorities=csrss.exe,3,audiodg.exe,3,fl64.exe,3
+DefaultGPUPriorities=dwm.exe,5
+DefaultMemoryPriorities=fl64.exe,5
+ThreadPriorityBoosts=
+DefaultAffinitiesEx=fl64.exe,0,0;2;4;6;8;10,audiodg.exe,0,2
+CPUSets=fl64.exe,(0;2;4;6;8;10),audiodg.exe,(2)
+KeepRunningProcessesEx=
+[ProcessAllowances]
+EfficiencyMode=audiodg.exe,0,fl64.exe,0
+[ProcessDefaults]
+MatchWildcardsToPathnames=true
+MatchOnCommandLine=false
+[AdvancedRules]
+DivideCPUPercentThresholdsBySystemCPUCount=false
+ProcessorGroupExtended=
+ProhibitInternetExplorerExceptWhenAny=
+WatchdogRules2=
+[GamingMode]
+GamingModeEnabled=false
+GamingChangePowerPlan=true
+TargetPowerPlan=Bitsum Highest Performance
+GamingModeEngageForSteam=true
+AutomaticGamingModeProcessPaths=
+AutomaticGamingModeUserExclusions=
+[PowerManagement]
+StartWithPowerPlan=
+Display=audiodg.exe,fl64.exe
+PC=
+[PowerSaver]
+PowerSaver_IdleTime=0
+EnergySaverEnabled=false
+EnergySaverForceActivePowerProfile=false
+EnergySaverUpPowerProfileName=
+EnergySaverEvents=true
+DisableEnergySaverDuringGamingMode=true
+PowerSaver_Exclusions=
+'@
+					$ini = "$env:ProgramData\ProcessLasso\config\prolasso.ini"
+					if (!(Test-Path $ini)) {New-Item "$env:ProgramData\ProcessLasso\config" -ItemType Directory -Force | Out-Null}
+					Set-Content $ini -Value $MultilineComment -Force
 					
+					$MultilineComment = @'
+Windows Registry Editor Version 5.00
+
+[HKEY_CURRENT_USER\Software\ProcessLasso]
+"ConfigPathMigrationComplete"=dword:00000001
+"ShowProcessIcons"=dword:00000001
+"nosortpowerprofiles"=dword:00000000
+"HideGraph"=dword:00000000
+"GUIColorScheme"=dword:00000001
+"WindowState"=dword:00000000
+"ActiveProcessesVersion"=dword:00000006
+"LogLVVersion"=dword:00000003
+"TreeViewMode"=dword:00000000
+"ActiveProcessesSensitivity"=dword:00000000
+"InsightsSortBy"=dword:00000001
+"SystemStateTryOnce"=dword:00000001
+"SysTrayGreetingDone"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\ProcessLasso]
+"GUIStart"=dword:00000000
+"CoreStart"=dword:00000004
+"InstalledSessionAgent"=dword:00000001
+"ProBalanceDefaultsApplied"=dword:0134d7bb
+"AddedToSystemPath"=dword:00000001
+"UpdateChecksEnabled"=dword:00000000
+"CustomHighPerfGUID"=hex:5b,80,c6,60,9a,ec,a9,4d,8f,4a,b1,12,78,a1,fc,84
+"AlwaysShowBitsumHighestPerformance"=dword:00000001
+"ConfigFolderEx"="C:\\ProgramData\\ProcessLasso\\config"
+"UpdatePromptless"=dword:00000000
+"SystemStateTryOnce"=dword:00000001
+'@;$reg = "$env:TEMP\plasso.reg"; Set-Content -Path $reg -Value $MultilineComment -Force; reg import $reg *>$null					
+					# activation					
+					cls;Write-Host "Activate Process Lasso?"
+				    Write-Host "1. Yes"
+				    Write-Host "2. No (Recommended)"
+				    while ($true) {
+						$choice = Read-Host " "
+						if ($choice -match '^[1-2]$') {
+							switch ($choice) {
+								1 {
+									cls;Write-Host @"
+================================================================================
+                          Bitsum Optimizers Activator
+================================================================================
+
+1. ABOUT ANTIVIRUS AND COMPRESSED BINARIES
+2. DISCLAIMER
+
+
+================================================================================
+1. ABOUT ANTIVIRUS AND COMPRESSED BINARIES
+================================================================================
+
+This release's binary is packed with an executable/dll compression tool to
+reduce his size (for an easy and quick upload/download).
+
+Unfortunatly, some of these compression programs have a bad reputation in the
+security software industry, mainly because almost 99% of troyans/worms/etc.
+is packed with similar tools (or variants of these), and this self-unpack
+behavior is taken by some antivirus apps as an alarm signal.
+
+Basically, this means that any trusted program packed with one of these tools
+can be erroneously detected as a virus, something know as a "FAKE POSITIVE".
+
+********************************************************************************
+IMPORTANT: If you got this release from me, from the site indicated at the end
+of this document or from any file server explicitly expressed by me; ignore any
+warning from your antivirus software (most certainly it's a fake positive).
+
+IF YOU GOT THIS FROM ELSEWHERE, THERE IS NO WARRANTY THAT YOUR COPY WILL BE FREE
+OF ANY THREAT; IN THAT CASE, I WILL NOT BE RESPONSIBLE FOR ANY DAMAGED CAUSED
+TO YOUR COMPUTER. YOU HAVE BEEN WARNED.
+********************************************************************************
+
+However, you can always do a simple integrity check: get the MD5 or SHA1 hash
+value for this release's binary and compare it against the value written at the
+top of this document. Any difference between the hash values means that the
+executable file was somehow modified/tampered. It's very simple.
+
+There are plenty of free tools around the net that you can use to verify file
+hashes, like HashTab (http://implbits.com) or HashMyFiles
+(http://www.nirsoft.net). This test isn't a foolproof concept, but can help.
+
+
+================================================================================
+2. DISCLAIMER
+================================================================================
+
+This program is provided "AS IS" without any warranty, either expressed or
+implied, including, but not limited to, the implied warranties of
+merchantability and fitness for a particular purpose. I take no responsibility
+for any damage that may unintentionally be caused through its use.
+
+You can use this program for evaluation purposes ONLY. You are not allowed to
+get a monetary profit of any kind through its use.
+
+
+================================================================================
+                               (c) 2017, RadiXX11
+================================================================================
+"@ -ForegroundColor Red
+									pause;cls;saps windowsdefender:;pause
+									cls;write-host 'Patching: Process Lasso Pro . . .'
+									$exe="$env:TEMP\Activator.exe"; Get-FileFromWeb 'https://github.com/sounderrun/files/raw/refs/heads/main/Bitsum%20Process%20Lasso%20Pro%2016.1.0.46%20Multilingual%20x64/Activator.exe' $exe
+									saps $exe "-activate -product:2 -licenseename:`"$env:USERNAME`" -patchhostsfile:1" -Wait; ri $exe -force -ea 0; saps windowsdefender:
+									show-menu
+								}
+								2 {
+									cls
+									show-menu
+								}
+							}
+						} else { Write-Host "Invalid input. Please select a valid option (1-2)." }
+					}
 				}
 				39 {
 					
-					# rel=Invoke-RestMethod "https://api.github.com/repos/Rem0o/FanControl.Releases/releases/latest"; $asset=$rel.assets | Where-Object { $_.name -match '_net_4_8_Installer\.exe$' } | Select-Object -First 1; if($asset){ $exe=Join-Path $env:TEMP $asset.name; Invoke-WebRequest $asset.browser_download_url -OutFile $exe -UseBasicParsing; Start-Process -FilePath $exe -ArgumentList '/verysilent' -Wait; $fc1="C:\Program Files (x86)\FanControl\FanControl.exe"; $fc2="C:\Program Files\FanControl\FanControl.exe"; if(Test-Path $fc1){ Start-Process $fc1 } elseif(Test-Path $fc2){ Start-Process $fc2 } } }				
+					cls;write-host "Installing: Fan Control . . ."
+					# download & install fan control
+					$release = irm https://api.github.com/repos/Rem0o/FanControl.Releases/releases/latest
+					$asset = $release.assets | ? { $_.name -match '_net_4_8_Installer\.exe$' } | select -f 1
+					if ($asset) {
+					    $exe = Join-Path $env:TEMP $asset.name
+					    Get-FileFromWeb  $asset.browser_download_url $exe
+					    saps $exe '/verysilent' -Wait
+					}		
+					show-menu
 					
 				}
+				40 {
+					
+					# 'https://it.libreoffice.org/donazioni/dl/win-x86_64/25.8.4/it/LibreOffice_25.8.4_Win_x86-64.msi'
+					show-menu
+					
+				}
+				41{
+					
+					# https://2.na.dl.wireshark.org/win64/Wireshark-4.6.2-x64.exe
+					show-menu
+					
+				}
+				42 {
+					
+					cls;$ProgressPreference = 'SilentlyContinue';write-host "Installing: Winaero Tweaker . . ."
+					# download & install winaero tweaker
+					$zip="$env:TEMP\winaerotweaker.zip";Get-FileFromWeb 'https://winaerotweaker.com/download/winaerotweaker.zip' $zip;Expand-Archive $zip "$env:TEMP" -force;& "$env:TEMP\SilentSetup.cmd" |out-null
+					$p="$env:ProgramData\Microsoft\Windows\Start Menu\Programs";mv "$p\Winaero Tweaker\Winaero Tweaker.lnk" $p -force -ea 0;ri "$p\Winaero Tweaker" -recurse -force -ea 0
+					show-menu
+					
+				}
+				43 {
+					
+					cls;write-host "Installing: Driver Booster . . ."
+					# download driver booster
+					$exe="$env:TEMP\driver_booster_setup.exe";try{Get-FileFromWeb 'https://cdn.iobit.com/dl/driver_booster_setup.exe' $exe}catch{Get-FileFromWeb 'https://www.iobit.com/downloadcenter.php?product=driver-booster-free-new' $exe}
+					# install driver booster
+					saps $exe '/verysilent'
+					# stop driver booster running
+					while(-not(gps DriverBooster -ea 0)){sleep -m 200};kill -name DriverBooster -force -ea 0
+					# debloat driver booster start menu shortcut
+					$p="$env:ProgramData\Microsoft\Windows\Start Menu\Programs";mv "$p\Driver Booster 13\Driver Booster 13.lnk" $p -force -ea 0;ri "$p\Driver Booster 13" -recurse -force -ea 0
+					# disable driver booster scheduled tasks
+					Get-ScheduledTask | ? TaskName -like "*Driver Booster*" | % { Disable-ScheduledTask -TaskName $_.TaskName -ea 0 > $null }					
+					show-menu
+					
+				}
+				44 {
+					
+					cls;write-host "Installing: LatencyMon . . ."
+					# download & install latencymon
+					$exe="$env:TEMP\LatencyMon.exe";Get-FileFromWeb 'https://www.resplendence.com/download/LatencyMon.exe' $exe; saps $exe '/verysilent' -wait
+					# debloat latencymon start menu shortcut
+					$p="$env:ProgramData\Microsoft\Windows\Start Menu\Programs";mv "$p\LatencyMon\LatencyMon.lnk" $p -force -ea 0;ri "$p\LatencyMon" -recurse -force -ea 0
+					show-menu
+					
+				}
+				45 {
+					
+					cls;write-host "Installing: Winhance . . ."
+					# download & install winhance
+					$exe="$env:TEMP\Winhance.Installer.exe";Get-FileFromWeb 'https://github.com/memstechtips/Winhance/releases/latest/download/Winhance.Installer.exe' $exe;saps $exe
+					show-menu
+					
+				}
+				46 {
+					
+					cls;write-host "Installing: Playnite . . ."
+					# download & install playnite
+					$exe="$env:TEMP\PlayniteInstaller.exe";Get-FileFromWeb 'https://playnite.link/download/PlayniteInstaller.exe' $exe;saps $exe
+					show-menu
+					
+				}
+				47 {
+					
+					cls;write-host ''
+					show-menu
+					
+				}	
+				48 {
+					
+					cls;write-host ''
+					show-menu
+					
+				}
+				49 {
+					
+					cls;write-host ''
+					show-menu
+					
+				}
+				50 {
+					
+					cls;write-host ''
+					show-menu
+					
+				}
+				51 {
+					
+					cls;$ProgressPreference='SilentlyContinue';write-host 'Installing: RyTuneX . . .'
+					# download & install rytunex
+					$exe="$env:TEMP\RyTuneXSetup.exe";Get-FileFromWeb "https://github.com/rayenghanmi/RyTuneX/releases/latest/download/RyTuneXSetup.exe" $exe;saps $exe "--packagemanager" -wait
+					show-menu
+					
+				}
+				52 {
+					
+					cls;write-host ''
+					show-menu
+					
+				}
+				53 {
+					
+					cls;write-host ''
+					show-menu
+					
+				}
+				54 {
+					
+					cls;write-host ''
+					show-menu
+					
+				}
+				55 {
+					
+					cls;write-host ''
+					show-menu
+					
+				}
+				56 {
+					
+					cls;write-host ''
+					show-menu
+					
+				}
+				57 {
+					
+					cls;write-host ''
+					show-menu
+					
+				}
+				58 {
+					
+					cls;write-host ''
+					show-menu
+					
+				}
+				59 {
+					
+					cls;write-host ''
+					show-menu
+					
+				}
+				60 {
+					
+					cls;write-host ''
+					show-menu
+					
+				}				
             }
         }
     }
